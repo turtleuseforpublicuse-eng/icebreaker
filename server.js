@@ -86,7 +86,8 @@ const quizManager = new QuizManager({
 
 const requestManager = new RequestManager({
   io,
-  getPlayers: () => players
+  getPlayers: () => players,
+  itemsConfig: config.items
 });
 
 function _checkWinner() {
@@ -458,6 +459,37 @@ io.on('connection', (socket) => {
     if (!fromRoleId) return;
     const result = requestManager.createRequest('food', fromRoleId, targetRoleId);
     if (!result.ok) return socket.emit('actionError', result.error);
+  });
+
+  socket.on('shareFoodItem', (requestId, itemId) => {
+    const fromRoleId = socketToRole[socket.id];
+    if (!fromRoleId) return;
+    const player = players[fromRoleId];
+    if (!player || !player.isAlive) return;
+
+    const reqIdx = requestManager.pendingRequests.findIndex(r => r.id === requestId && r.status === 'pending' && r.targetRoleId === fromRoleId);
+    if (reqIdx === -1) return socket.emit('actionError', 'Request not found or already handled.');
+
+    const itemIdx = (player.inventory || []).findIndex(i => i.id === itemId);
+    if (itemIdx === -1) return socket.emit('actionError', 'You do not have that item!');
+
+    const item = player.inventory.splice(itemIdx, 1)[0];
+    const request = requestManager.pendingRequests[reqIdx];
+    request.sharedItemId = item.id;
+    request.status = 'accepted';
+
+    const toPlayer = players[request.fromRoleId];
+    if (toPlayer) {
+      const itemDef = requestManager.getItemDef(item.id);
+      if (itemDef) {
+        if (itemDef.hungerRestore) toPlayer.hunger = Math.min(100, toPlayer.hunger + itemDef.hungerRestore);
+        if (itemDef.healthRestore) toPlayer.health = Math.min(100, toPlayer.health + itemDef.healthRestore);
+      }
+      if (toPlayer.socketId) io.to(toPlayer.socketId).emit('actionSuccess', { message: player.name + ' shared ' + item.icon + ' ' + item.name + ' with you!' });
+    }
+    if (player.socketId) io.to(player.socketId).emit('actionSuccess', { message: 'You shared ' + item.icon + ' ' + item.name + ' with ' + (toPlayer ? toPlayer.name : 'someone') + '!' });
+
+    io.emit('updatePlayers', players);
   });
 
   socket.on('requestEngineer', () => {

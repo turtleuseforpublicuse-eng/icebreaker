@@ -307,8 +307,11 @@
   <div class="modal-box">
     <h3 id="requestModalTitle">Request</h3>
     <p id="requestModalText"></p>
-    <button class="btn btn-green btn-sm" onclick="respondRequestModal(true)">Accept</button>
-    <button class="btn btn-red btn-sm" onclick="respondRequestModal(false)">Decline</button>
+    <div id="requestItemSelect" style="display:none; margin-top:10px;"></div>
+    <div id="requestActionBtns">
+      <button class="btn btn-green btn-sm" onclick="respondRequestModal(true)">Accept</button>
+      <button class="btn btn-red btn-sm" onclick="respondRequestModal(false)">Decline</button>
+    </div>
   </div>
 </div>
 
@@ -340,10 +343,8 @@
   </div>
 </div>
 
-<div class="quiz-panel" id="countdownPanel" style="display:none;">
-  <div class="quiz-box">
-    <p id="countdownText" style="font-size:18px; font-weight:bold; color:#ff6b6b;"></p>
-  </div>
+<div id="countdownPanel" style="display:none; position:fixed; top:10px; right:10px; z-index:9999; pointer-events:none;">
+  <p id="countdownText" style="font-size:18px; font-weight:bold; color:#ff6b6b; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); margin:0;"></p>
 </div>
 
 <div class="quiz-panel" id="quizResultsPanel">
@@ -921,10 +922,54 @@ socket.on('requestReceived', (data) => {
   pendingRequestFrom = data;
   document.getElementById('requestModalTitle').innerText = data.type.charAt(0).toUpperCase() + data.type.slice(1) + ' Request';
   document.getElementById('requestModalText').innerText = data.message;
+
+  const itemSelect = document.getElementById('requestItemSelect');
+  const actionBtns = document.getElementById('requestActionBtns');
+  itemSelect.innerHTML = '';
+  itemSelect.style.display = 'none';
+  actionBtns.style.display = 'block';
+
+  if (data.type === 'food' && myRoleId && playersData[myRoleId] && playersData[myRoleId].roleName === 'Scavenger') {
+    const me = playersData[myRoleId];
+    const foodItems = (me.inventory || []).filter(i => i.id === 'food' || i.id === 'water');
+    if (foodItems.length > 0) {
+      actionBtns.style.display = 'none';
+      itemSelect.style.display = 'block';
+      itemSelect.innerHTML = '<p style="margin:0 0 8px; font-size:13px;">Choose an item to share:</p>';
+      foodItems.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        btn.style.cssText = 'display:inline-block; margin:4px; font-size:14px;';
+        btn.innerHTML = item.icon + ' ' + item.name;
+        btn.onclick = () => {
+          socket.emit('shareFoodItem', pendingRequestFrom.requestId, item.id);
+          document.getElementById('requestModal').classList.remove('visible');
+          pendingRequestFrom = null;
+        };
+        itemSelect.appendChild(btn);
+      });
+      const declineBtn = document.createElement('button');
+      declineBtn.className = 'btn btn-red btn-sm';
+      declineBtn.style.cssText = 'margin-top:8px;';
+      declineBtn.innerText = 'Decline';
+      declineBtn.onclick = () => respondRequestModal(false);
+      itemSelect.appendChild(declineBtn);
+    }
+  }
+
   document.getElementById('requestModal').classList.add('visible');
 });
 function respondRequestModal(accept) {
   if (pendingRequestFrom) {
+    if (accept && pendingRequestFrom.type === 'food' && myRoleId && playersData[myRoleId] && playersData[myRoleId].roleName === 'Scavenger') {
+      const me = playersData[myRoleId];
+      const foodItems = (me.inventory || []).filter(i => i.id === 'food' || i.id === 'water');
+      if (foodItems.length > 0) {
+        document.getElementById('requestModal').classList.remove('visible');
+        pendingRequestFrom = null;
+        return;
+      }
+    }
     socket.emit('respondRequest', pendingRequestFrom.requestId, accept);
   }
   document.getElementById('requestModal').classList.remove('visible');
