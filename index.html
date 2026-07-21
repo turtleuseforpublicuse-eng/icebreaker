@@ -259,7 +259,7 @@
 
   <div id="requestPanel" style="margin: 8px auto; max-width: 340px;">
     <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
-      <button class="btn btn-red btn-sm" onclick="doRequestMedic()">Request Medic</button>
+      <button class="btn btn-red btn-sm" id="btnMedicRequest" onclick="doRequestMedic()">Request Medic (2 left)</button>
       <button class="btn btn-green btn-sm" onclick="doRequestFood()">Request Food</button>
       <button class="btn btn-blue btn-sm" onclick="doRequestEngineer()">Alert Engineer</button>
     </div>
@@ -408,6 +408,7 @@ let eventActive = false;
 let nearbyFurniture = null;
 let pendingMedicTarget = null;
 let pendingFoodTarget = null;
+let responseCounter = null;
 
 function formatStatBlocks(value, total = 10) {
   const pct = Math.max(0, Math.min(100, value));
@@ -639,6 +640,19 @@ function updateControllerStats(me) {
   updateStatDisplay('controllerHealth', me.health);
   updateStatDisplay('controllerHunger', me.hunger);
   document.getElementById('controllerDead').style.display = me.isAlive ? 'none' : 'block';
+  const medicBtn = document.getElementById('btnMedicRequest');
+  if (medicBtn) {
+    const remaining = 2 - (me.medicRequestCount || 0);
+    if (remaining <= 0) {
+      medicBtn.innerText = 'No Medic Requests Left';
+      medicBtn.disabled = true;
+      medicBtn.style.opacity = '0.5';
+    } else {
+      medicBtn.innerText = 'Request Medic (' + remaining + ' left)';
+      medicBtn.disabled = false;
+      medicBtn.style.opacity = '1';
+    }
+  }
 }
 
 function updateLobbyList() {
@@ -936,6 +950,7 @@ socket.on('quizStarted', (data) => {
     optDiv.appendChild(btn);
   });
   document.getElementById('quizPanel').classList.add('visible');
+  responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'quiz' };
   let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('quizTimer').innerText = 'Time: ' + timeLeft + 's';
   const interval = setInterval(() => {
@@ -944,16 +959,23 @@ socket.on('quizStarted', (data) => {
     if (timeLeft <= 0) clearInterval(interval);
   }, 1000);
 });
+socket.on('quizResponseCount', (data) => {
+  if (responseCounter && responseCounter.type === 'quiz') {
+    responseCounter.responded = data.responded;
+    responseCounter.totalPlayers = data.totalPlayers;
+  }
+});
 socket.on('quizResults', (data) => {
   document.getElementById('quizPanel').classList.remove('visible');
+  responseCounter = null;
   document.getElementById('quizResultsText').innerText = 'Correct: ' + data.question.split('?')[0] + '?';
   const winnersDiv = document.getElementById('quizWinners');
   winnersDiv.innerHTML = '';
   if (data.winners.length === 0) {
     winnersDiv.innerHTML = '<p style="color:#aaa;">No one got it right!</p>';
   } else {
-    data.winners.forEach((w, i) => {
-      winnersDiv.innerHTML += '<p style="color:#ffd200;">#' + (i+1) + ' ' + w.roleIcon + ' ' + w.name + ' (' + (w.timeTaken/1000).toFixed(1) + 's) +20HP +10Food</p>';
+    data.winners.forEach((w) => {
+      winnersDiv.innerHTML += '<p style="color:#ffd200;">#' + w.place + ' ' + w.roleIcon + ' ' + w.name + ' (' + (w.timeTaken/1000).toFixed(1) + 's) +' + w.prize.health + 'HP +' + w.prize.food + 'Food</p>';
     });
   }
   document.getElementById('quizResultsPanel').classList.add('visible');
@@ -967,6 +989,7 @@ socket.on('essayStarted', (data) => {
   document.getElementById('essayInput').value = '';
   document.getElementById('essayInput').maxLength = data.maxChars;
   document.getElementById('essayPanel').classList.add('visible');
+  responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'essay' };
   let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('essayTimer').innerText = 'Time: ' + timeLeft + 's';
   const interval = setInterval(() => {
@@ -974,6 +997,12 @@ socket.on('essayStarted', (data) => {
     document.getElementById('essayTimer').innerText = 'Time: ' + timeLeft + 's';
     if (timeLeft <= 0) clearInterval(interval);
   }, 1000);
+});
+socket.on('essayResponseCount', (data) => {
+  if (responseCounter && responseCounter.type === 'essay') {
+    responseCounter.responded = data.responded;
+    responseCounter.totalPlayers = data.totalPlayers;
+  }
 });
 function submitEssay() {
   const text = document.getElementById('essayInput').value;
@@ -983,6 +1012,7 @@ function submitEssay() {
 }
 socket.on('essayVotingStarted', (data) => {
   document.getElementById('essayPanel').classList.remove('visible');
+  responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'essayVote' };
   const container = document.getElementById('essayVoteOptions');
   container.innerHTML = '';
   data.responses.forEach(r => {
@@ -1002,13 +1032,21 @@ socket.on('essayVotingStarted', (data) => {
     if (timeLeft <= 0) clearInterval(interval);
   }, 1000);
 });
+socket.on('essayVoteCount', (data) => {
+  if (responseCounter && responseCounter.type === 'essayVote') {
+    responseCounter.responded = data.voted;
+    responseCounter.totalPlayers = data.totalPlayers;
+  }
+});
 socket.on('essayWinner', (data) => {
   document.getElementById('essayVotePanel').classList.remove('visible');
+  responseCounter = null;
   showToast(data.roleIcon + ' ' + data.name + ' won the essay! They have immunity from the next disaster!');
 });
 socket.on('essayCancelled', (data) => {
   document.getElementById('essayVotePanel').classList.remove('visible');
   document.getElementById('essayPanel').classList.remove('visible');
+  responseCounter = null;
   showToast('Essay cancelled: ' + data.reason);
 });
 socket.on('disasterCountdown', (data) => {
@@ -1044,7 +1082,10 @@ function doEject() {
 
 function doRequestMedic() {
   if (!myRoleId || !playersData[myRoleId]) return;
-  if (playersData[myRoleId].health >= 50) return showToast('You can only request a Medic below 50 health!');
+  const me = playersData[myRoleId];
+  if (me.health >= 50) return showToast('You can only request a Medic below 50 health!');
+  const remaining = 2 - (me.medicRequestCount || 0);
+  if (remaining <= 0) return showToast('No more Medic requests! Use food/water instead.');
   socket.emit('requestMedic');
 }
 
@@ -1311,6 +1352,22 @@ function gameLoop() {
     const progress = 1 - remaining / activeEvent.duration;
     updateParticles(progress);
     drawEventEffectsForeground();
+  }
+  if (responseCounter) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath();
+    ctx.roundRect(650, 12, 140, 28, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Poppins, sans-serif';
+    ctx.textAlign = 'center';
+    let label = '';
+    if (responseCounter.type === 'quiz') label = 'Answered: ';
+    else if (responseCounter.type === 'essay') label = 'Submitted: ';
+    else label = 'Voted: ';
+    ctx.fillText(label + responseCounter.responded + '/' + responseCounter.totalPlayers, 720, 31);
+    ctx.restore();
   }
   ctx.restore();
   requestAnimationFrame(gameLoop);

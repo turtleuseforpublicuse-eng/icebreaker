@@ -21,8 +21,8 @@ const GRAVITY = 1.3;
 const JUMP_SPEED = 15;
 const MOVE_SPEED = 6;
 const TICK_MS = 50;
-const PLAYER_MIN_X = -80;
-const PLAYER_MAX_X = 880;
+const PLAYER_MIN_X = 20;
+const PLAYER_MAX_X = 780;
 
 let players = {};
 let socketToRole = {};
@@ -170,6 +170,7 @@ function makeFreshPlayer(roleDef, data) {
     socketId: null,
     inventory: [],
     essayImmunity: false,
+    medicRequestCount: 0,
     hidingIn: null
   };
 }
@@ -430,6 +431,7 @@ io.on('connection', (socket) => {
     const player = players[fromRoleId];
     if (!player || !player.isAlive) return;
     if (player.health >= 50) return socket.emit('actionError', 'You can only request a Medic below 50 health!');
+    if (player.medicRequestCount >= 2) return socket.emit('actionError', 'No more Medic requests! You have used all 2. Use food/water instead.');
     const medics = Object.entries(players).filter(([rid, p]) => p.roleName === 'Medic' && p.isAlive && p.connected && rid !== fromRoleId);
     if (medics.length === 0) return socket.emit('actionError', 'No Medic available!');
     socket.emit('medicSelectShow', { medics: medics.map(([rid, p]) => ({ roleId: rid, name: p.name, roleIcon: p.roleIcon })) });
@@ -438,6 +440,7 @@ io.on('connection', (socket) => {
   socket.on('requestMedicTarget', (targetRoleId) => {
     const fromRoleId = socketToRole[socket.id];
     if (!fromRoleId) return;
+    players[fromRoleId].medicRequestCount = (players[fromRoleId].medicRequestCount || 0) + 1;
     const result = requestManager.createRequest('heal', fromRoleId, targetRoleId);
     if (!result.ok) return socket.emit('actionError', result.error);
   });
