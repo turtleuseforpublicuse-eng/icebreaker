@@ -21,10 +21,8 @@ const GRAVITY = 1.3;
 const JUMP_SPEED = 15;
 const MOVE_SPEED = 6;
 const TICK_MS = 50;
-const SCAVENGER_MIN_X = -40;
-const SCAVENGER_MAX_X = 840;
-const NORMAL_MIN_X = 60;
-const NORMAL_MAX_X = 740;
+const PLAYER_MIN_X = -80;
+const PLAYER_MAX_X = 880;
 
 let players = {};
 let socketToRole = {};
@@ -381,8 +379,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('throwQuiz', () => {
+    disasterManager.pause();
     const result = quizManager.throwQuiz();
-    if (!result.ok) return socket.emit('actionError', result.error);
+    if (!result.ok) { disasterManager.resume(); return socket.emit('actionError', result.error); }
   });
 
   socket.on('submitQuizAnswer', (answerIndex) => {
@@ -394,8 +393,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('throwEssay', () => {
+    disasterManager.pause();
     const result = quizManager.throwEssay();
-    if (!result.ok) return socket.emit('actionError', result.error);
+    if (!result.ok) { disasterManager.resume(); return socket.emit('actionError', result.error); }
   });
 
   socket.on('submitEssay', (text) => {
@@ -412,6 +412,16 @@ io.on('connection', (socket) => {
     const result = quizManager.voteEssay(fromRoleId, targetRoleId);
     if (!result.ok) return socket.emit('actionError', result.error);
     socket.emit('voteSubmitted');
+  });
+
+  socket.on('quizComplete', () => { disasterManager.resume(); });
+  socket.on('essayComplete', () => { disasterManager.resume(); });
+
+  socket.on('triggerDisaster', () => {
+    const evts = config.events;
+    const ev = evts[Math.floor(Math.random() * evts.length)];
+    disasterManager._clearTimers();
+    disasterManager._beginWarningSequence(ev, true);
   });
 
   socket.on('requestMedic', () => {
@@ -523,11 +533,8 @@ setInterval(() => {
 
     if (p.hidingIn) continue;
 
-    const minX = p.roleName === 'Scavenger' ? SCAVENGER_MIN_X : NORMAL_MIN_X;
-    const maxX = p.roleName === 'Scavenger' ? SCAVENGER_MAX_X : NORMAL_MAX_X;
-
-    if (p.moving.left) { p.x = Math.max(minX, p.x - MOVE_SPEED); changed = true; }
-    if (p.moving.right) { p.x = Math.min(maxX, p.x + MOVE_SPEED); changed = true; }
+    if (p.moving.left) { p.x = Math.max(PLAYER_MIN_X, p.x - MOVE_SPEED); changed = true; }
+    if (p.moving.right) { p.x = Math.min(PLAYER_MAX_X, p.x + MOVE_SPEED); changed = true; }
 
     if (p.vy !== 0 || p.offsetY > (p.floor === 2 ? 200 : 0)) {
       p.offsetY += p.vy;

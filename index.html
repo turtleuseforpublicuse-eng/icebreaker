@@ -124,7 +124,7 @@
 <body>
 
 <div id="setup">
-  <h1 style="font-size: 3em; margin-bottom: 0;">Jake's DRRR Survival</h1>
+  <h1 style="font-size: 3em; margin-bottom: 0;">DRRR Survival</h1>
   <p style="color: #4facfe; margin-bottom: 40px;">The Safe House Icebreaker</p>
   <button class="btn btn-blue" onclick="setHost()">Start as Host (Projector)</button>
   <button class="btn btn-green" onclick="setPlayer()">Join as Player (Phone)</button>
@@ -207,6 +207,20 @@
 <div id="clientController">
   <h2 id="controllerName">Survivor</h2>
   <h3 id="controllerRole" style="color: #4facfe; margin-top: -10px;"></h3>
+  <div class="controls" id="controlPad">
+    <button class="ctrl-btn" id="btnLeft" aria-label="Move left">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+    <button class="ctrl-btn" id="btnJump" aria-label="Jump">
+      <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" transform="rotate(-90 12 12)"/></svg>
+    </button>
+    <button class="ctrl-btn" id="btnRight" aria-label="Move right">
+      <svg viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+    </button>
+    <button class="ctrl-btn" id="btnStairs" aria-label="Use stairs" style="background: linear-gradient(135deg, #f7971e, #ffd200); color: #111;">
+      <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm4 0v12h2V6h-2z" fill="#111"/></svg>
+    </button>
+  </div>
   <div class="controller-bars">
     <div class="stat-row">
       <div class="stat-label"><span>Health</span><span id="controllerHealthNum">100</span></div>
@@ -271,21 +285,6 @@
     <button class="btn btn-gray btn-sm" onclick="toggleSwapPanel()">Request Role Swap</button>
     <div id="swapPlayerList" style="display:none; margin-top:8px;"></div>
   </div>
-
-  <div class="controls" id="controlPad">
-    <button class="ctrl-btn" id="btnLeft" aria-label="Move left">
-      <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-    </button>
-    <button class="ctrl-btn" id="btnJump" aria-label="Jump">
-      <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" transform="rotate(-90 12 12)"/></svg>
-    </button>
-    <button class="ctrl-btn" id="btnRight" aria-label="Move right">
-      <svg viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
-    </button>
-    <button class="ctrl-btn" id="btnStairs" aria-label="Use stairs" style="background: linear-gradient(135deg, #f7971e, #ffd200); color: #111;">
-      <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm4 0v12h2V6h-2z" fill="#111"/></svg>
-    </button>
-  </div>
 </div>
 
 <div class="disaster-overlay large" id="disasterOverlayLarge">
@@ -338,6 +337,12 @@
     <p style="font-size:13px; color:#aaa;">You cannot vote for yourself.</p>
     <div id="essayVoteOptions"></div>
     <p id="essayVoteTimer" style="font-size:13px; color:#aaa;"></p>
+  </div>
+</div>
+
+<div class="quiz-panel" id="countdownPanel" style="display:none;">
+  <div class="quiz-box">
+    <p id="countdownText" style="font-size:18px; font-weight:bold; color:#ff6b6b;"></p>
   </div>
 </div>
 
@@ -729,14 +734,26 @@ function updateScavengePanel() {
   if (me.roleName === 'Scavenger') {
     panel.classList.add('visible');
     spots.innerHTML = '';
-    const spotsList = [{ id: 'shrub1', name: 'Shrub (Left)', icon: '🌿' }, { id: 'shrub2', name: 'Shrub (Right)', icon: '🌿' }, { id: 'shrub3', name: 'Shrub (Far Left)', icon: '🌿' }];
+    const spotsList = [
+      { id: 'shrub1', name: 'Shrub (Left)', icon: '🌿', x: 30 },
+      { id: 'shrub2', name: 'Shrub (Right)', icon: '🌿', x: 760 },
+      { id: 'shrub3', name: 'Shrub (Far Left)', icon: '🌿', x: 10 }
+    ];
+    let anyNear = false;
     spotsList.forEach(s => {
-      const btn = document.createElement('button');
-      btn.className = 'action-btn';
-      btn.innerHTML = s.icon + ' ' + s.name;
-      btn.onclick = () => socket.emit('scavenge', s.id);
-      spots.appendChild(btn);
+      const dist = Math.abs(me.x - s.x);
+      if (dist < 80) {
+        anyNear = true;
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        btn.innerHTML = s.icon + ' ' + s.name;
+        btn.onclick = () => socket.emit('scavenge', s.id);
+        spots.appendChild(btn);
+      }
     });
+    if (!anyNear) {
+      spots.innerHTML = '<span style="color:#888; font-size:12px;">Move closer to a shrub to scavenge</span>';
+    }
   } else {
     panel.classList.remove('visible');
   }
@@ -994,8 +1011,22 @@ socket.on('essayCancelled', (data) => {
   document.getElementById('essayPanel').classList.remove('visible');
   showToast('Essay cancelled: ' + data.reason);
 });
+socket.on('disasterCountdown', (data) => {
+  let remaining = data.seconds;
+  const el = document.getElementById('countdownPanel');
+  const text = document.getElementById('countdownText');
+  if (!el || !text) return;
+  el.style.display = 'block';
+  const iv = setInterval(() => {
+    text.innerText = data.event.icon + ' ' + data.event.name + ' arriving in ' + remaining + 's...';
+    remaining--;
+    if (remaining < 0) { clearInterval(iv); el.style.display = 'none'; }
+  }, 1000);
+});
+socket.on('disasterPaused', () => { showToast('Disaster paused for quiz/essay!'); });
+socket.on('disasterResumed', () => { showToast('Disaster resumed!'); });
 function hostThrowEssay() { socket.emit('throwEssay'); }
-function hostTriggerDisaster() { socket.emit('throwQuiz'); }
+function hostTriggerDisaster() { socket.emit('triggerDisaster'); }
 
 function doHide() {
   if (nearbyFurniture) {
@@ -1003,6 +1034,12 @@ function doHide() {
     nearbyFurniture = null;
     updateHideButton();
   }
+}
+
+function doEject() {
+  socket.emit('unhide');
+  if (myRoleId && playersData[myRoleId]) playersData[myRoleId].hidingIn = null;
+  updateHideButton();
 }
 
 function doRequestMedic() {
@@ -1018,7 +1055,16 @@ function updateHideButton() {
   const panel = document.getElementById('hidePanel');
   if (!panel || !myRoleId || !playersData[myRoleId]) return;
   const me = playersData[myRoleId];
-  if (!me.isAlive || me.hidingIn) { panel.style.display = 'none'; return; }
+  if (!me.isAlive) { panel.style.display = 'none'; return; }
+
+  if (me.hidingIn) {
+    panel.style.display = 'block';
+    const fid = me.hidingIn;
+    const f = furnitureData[fid];
+    document.getElementById('hideBtn').innerText = 'Eject from ' + (f ? f.icon + ' ' + f.name : 'furniture') + '?';
+    document.getElementById('hideBtn').onclick = doEject;
+    return;
+  }
 
   nearbyFurniture = null;
   for (const fid in furnitureData) {
@@ -1034,6 +1080,7 @@ function updateHideButton() {
   if (nearbyFurniture) {
     panel.style.display = 'block';
     document.getElementById('hideBtn').innerText = 'Hide in ' + nearbyFurniture.furniture.icon + ' ' + nearbyFurniture.furniture.name + '?';
+    document.getElementById('hideBtn').onclick = doHide;
   } else {
     panel.style.display = 'none';
   }
@@ -1074,6 +1121,33 @@ const ctx = canvas ? canvas.getContext('2d') : null;
 function drawHouse() {
   ctx.fillStyle = '#4a3b32';
   ctx.fillRect(0, HOUSE.groundY, 800, 50);
+
+  ctx.fillStyle = '#2d7d46';
+  ctx.beginPath();
+  ctx.arc(25, HOUSE.groundY - 5, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(40, HOUSE.groundY - 8, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a5c2e';
+  ctx.fillRect(23, HOUSE.groundY - 2, 4, 15);
+
+  ctx.fillStyle = '#2d7d46';
+  ctx.beginPath();
+  ctx.arc(775, HOUSE.groundY - 5, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(790, HOUSE.groundY - 8, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a5c2e';
+  ctx.fillRect(773, HOUSE.groundY - 2, 4, 15);
+
+  ctx.fillStyle = '#2d7d46';
+  ctx.beginPath();
+  ctx.arc(15, HOUSE.groundY - 5, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a5c2e';
+  ctx.fillRect(13, HOUSE.groundY - 2, 4, 12);
 
   ctx.strokeStyle = '#c9a66b';
   ctx.lineWidth = 6;
