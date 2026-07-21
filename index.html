@@ -7,7 +7,8 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
 
-  body { font-family: 'Poppins', sans-serif; text-align: center; margin: 0; padding: 0; background-color: #1a1a2e; color: white; overflow-x: hidden; min-height: 100vh; }
+  * { -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Poppins', sans-serif; text-align: center; margin: 0; padding: 0; background-color: #1a1a2e; color: white; overflow-x: hidden; min-height: 100vh; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   h1, h2 { margin-bottom: 10px; }
 
   .btn { padding: 15px 30px; margin: 10px; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; transition: transform 0.15s, box-shadow 0.15s; color: white; }
@@ -18,26 +19,28 @@
   .btn-green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: #111; }
   .btn-red { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); }
   .btn-gray { background: #3a3a55; }
+  .btn-sm { padding: 8px 16px; font-size: 14px; margin: 4px; }
 
-  input { padding: 12px; font-size: 16px; border-radius: 6px; border: 2px solid #4facfe; background: #16213e; color: white; margin: 5px; outline: none; text-align: center; }
+  input { padding: 12px; font-size: 16px; border-radius: 6px; border: 2px solid #4facfe; background: #16213e; color: white; margin: 5px; outline: none; text-align: center; user-select: text; -webkit-user-select: text; }
   input[type="color"] { padding: 0; height: 50px; width: 50px; border-radius: 50%; cursor: pointer; border: 2px solid white; }
 
   #setup, #hostView, #lobbyStep1, #lobbyStep2, #clientController, #clientWaiting { display: none; padding: 20px; box-sizing: border-box; }
   #setup { display: block; margin-top: 10vh; }
 
   .host-layout { display: flex; justify-content: center; align-items: flex-start; gap: 20px; max-width: 1200px; margin: 0 auto; flex-wrap: wrap; }
-  canvas { background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; }
+  .canvas-wrap { position: relative; display: inline-block; }
+  canvas { background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; display: block; }
 
   .sidebar { background: #16213e; padding: 20px; border-radius: 10px; width: 260px; text-align: left; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 560px; overflow-y: auto; }
   .player-card { background: #0f3460; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 5px solid white; transition: opacity 0.3s; }
   .player-card.dead { opacity: 0.5; filter: grayscale(100%); border-left-color: red; }
   .player-card .row1 { display: flex; justify-content: space-between; align-items: center; }
-  .bar-track { background: #051022; border-radius: 4px; height: 8px; margin-top: 4px; overflow: hidden; }
+  .bar-track { background: #051022; border-radius: 4px; height: 10px; margin-top: 4px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .stat-blocks { font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; color: #cfe8ff; margin-top: 2px; }
   .room-code-display { font-size: 32px; font-weight: bold; color: #4facfe; letter-spacing: 4px; background: #0f3460; padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: center;}
-
-  .event-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
-  .event-btn { flex: 1 1 130px; padding: 12px 8px; font-size: 15px; }
+  .round-display { font-size: 18px; color: #43e97b; font-weight: bold; margin: 8px 0; }
+  .auto-disaster-note { color: #aaa; font-size: 13px; margin-top: 10px; }
 
   .roles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; max-width: 600px; margin: 20px auto; }
   .role-card { background: #0f3460; padding: 15px 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: 0.2s; font-size: 14px; position: relative; }
@@ -47,9 +50,10 @@
   .role-card.taken { background: #333; color: #888; cursor: not-allowed; opacity: 0.7; }
   .taken-by { font-size: 11px; color: #ffb199; margin-top: 5px; display: block; font-weight: bold; }
 
-  .controls { display: flex; justify-content: center; gap: 20px; margin-top: 50px; }
-  .ctrl-btn { width: 80px; height: 80px; font-size: 30px; border-radius: 50%; background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; border: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-  .ctrl-btn:active { transform: scale(0.9); }
+  .controls { display: flex; justify-content: center; gap: 20px; margin-top: 30px; touch-action: none; }
+  .ctrl-btn { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; border: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; touch-action: none; cursor: pointer; padding: 0; }
+  .ctrl-btn:active, .ctrl-btn.active { transform: scale(0.92); background: linear-gradient(135deg, #00c6ff, #0072ff); }
+  .ctrl-btn svg { width: 36px; height: 36px; pointer-events: none; fill: white; }
 
   .lobby-list { max-width: 500px; margin: 20px auto; text-align: left; }
   .lobby-player { background: #0f3460; padding: 10px 15px; border-radius: 6px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
@@ -57,28 +61,49 @@
   .pulse { animation: pulse 1.5s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-  /* Circular color picker */
   .color-picker-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 10px 0 20px; }
   #colorPreview { width: 46px; height: 46px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
   #colorWheelCanvas { border-radius: 50%; cursor: crosshair; touch-action: none; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
 
-  /* Role description panel */
   #roleDescription { max-width: 480px; margin: 10px auto 0; min-height: 40px; color: #cfe8ff; font-size: 14px; background: #0f3460; border-radius: 8px; padding: 10px 16px; }
 
-  /* Rejoin (reclaim seat) screen */
   .rejoin-option { background: #0f3460; padding: 14px 18px; border-radius: 8px; margin: 8px auto; max-width: 400px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 2px solid transparent; }
   .rejoin-option:hover { border-color: #4facfe; }
 
-  /* Controller stat bars */
-  .controller-bars { max-width: 320px; margin: 10px auto 20px; text-align: left; }
-  .controller-bars .stat-label { font-size: 13px; color: #aaa; display: flex; justify-content: space-between; margin-top: 8px; }
+  .controller-bars { max-width: 340px; margin: 10px auto 16px; text-align: left; }
+  .controller-bars .stat-row { margin-top: 10px; }
+  .controller-bars .stat-label { font-size: 13px; color: #aaa; display: flex; justify-content: space-between; margin-bottom: 4px; }
   .controller-bars .bar-track { height: 14px; background: #051022; border-radius: 7px; overflow: hidden; }
   .controller-bars .bar-fill { height: 100%; transition: width 0.3s; }
+
+  /* Disaster warning overlays */
+  .disaster-overlay { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; pointer-events: none; }
+  .disaster-overlay.visible { display: flex; animation: warnPulse 0.6s ease-in-out infinite alternate; }
+  .disaster-overlay.large { background: rgba(180, 20, 20, 0.85); }
+  .disaster-overlay.small { background: rgba(180, 100, 20, 0.55); }
+  .disaster-overlay .warn-text { font-size: clamp(28px, 8vw, 64px); font-weight: 800; color: #fff; text-shadow: 0 0 20px rgba(0,0,0,0.8); letter-spacing: 2px; padding: 20px; text-align: center; }
+  @keyframes warnPulse { from { opacity: 0.85; } to { opacity: 1; } }
+
+  .lookout-detect-panel { display: none; background: #0f3460; border: 2px solid #ffb199; border-radius: 10px; padding: 12px; margin: 12px auto; max-width: 340px; }
+  .lookout-detect-panel.visible { display: block; }
+
+  .swap-panel { margin: 12px auto; max-width: 340px; }
+  .swap-player-btn { background: #0f3460; border: 1px solid #4facfe; color: white; padding: 8px 12px; border-radius: 6px; margin: 4px; font-size: 13px; cursor: pointer; }
+  .swap-player-btn:hover { background: #1a4f70; }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop.visible { display: flex; }
+  .modal-box { background: #16213e; border-radius: 12px; padding: 24px; max-width: 360px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  .modal-box h3 { margin-top: 0; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f3460; border: 1px solid #4facfe; padding: 12px 20px; border-radius: 8px; z-index: 10001; display: none; font-size: 14px; max-width: 90%; }
+  .toast.visible { display: block; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+  #clientController { touch-action: manipulation; }
 </style>
 </head>
 <body>
 
-<!-- Screen: Pick Host or Player -->
 <div id="setup">
   <h1 style="font-size: 3em; margin-bottom: 0;">DRRR Survival</h1>
   <p style="color: #4facfe; margin-bottom: 40px;">The Safe House Icebreaker</p>
@@ -86,14 +111,13 @@
   <button class="btn btn-green" onclick="setPlayer()">Join as Player (Phone)</button>
 </div>
 
-<!-- HOST VIEW -->
 <div id="hostView">
   <div style="text-align: center; margin-bottom: 10px;">
     <p style="margin: 0; color: #888; text-transform: uppercase; font-size: 12px;">Join Code</p>
     <div class="room-code-display" id="hostRoomCode">----</div>
+    <div class="round-display" id="hostRoundDisplay" style="display:none;">Round 1 / 10</div>
   </div>
 
-  <!-- Host Lobby (Intermission) -->
   <div id="hostLobby">
     <h2>Waiting Room</h2>
     <p style="color: #aaa;">Players can join now. Start whenever everyone's ready — no rush!</p>
@@ -101,17 +125,13 @@
     <button class="btn btn-green" id="startGameBtn" onclick="startGame()" disabled>▶ Start Game</button>
   </div>
 
-  <!-- Host Active Game -->
   <div id="hostGame" style="display:none;">
     <div class="host-layout">
       <div>
-        <canvas id="gameCanvas" width="800" height="500"></canvas>
-        <div class="event-bar">
-          <button class="btn btn-red event-btn" onclick="triggerEvent('earthquake')">🌍 Earthquake</button>
-          <button class="btn btn-red event-btn" onclick="triggerEvent('typhoon')">🌪️ Typhoon</button>
-          <button class="btn btn-red event-btn" onclick="triggerEvent('tsunami')">🌊 Tsunami</button>
-          <button class="btn btn-red event-btn" onclick="triggerEvent('meteor')">☄️ Meteor Strike</button>
+        <div class="canvas-wrap">
+          <canvas id="gameCanvas" width="800" height="500"></canvas>
         </div>
+        <p class="auto-disaster-note">⚡ Disasters strike automatically every 1–2 minutes. Lookouts can detect them early!</p>
       </div>
       <div class="sidebar">
         <h3>Survivors</h3>
@@ -122,7 +142,6 @@
   </div>
 </div>
 
-<!-- PLAYER LOBBY STEP 1: Enter Code -->
 <div id="lobbyStep1">
   <h2>Enter Room Code</h2>
   <input type="text" id="joinCode" placeholder="4-Letter Code" maxlength="4" style="text-transform: uppercase; font-size: 24px; letter-spacing: 5px;"><br>
@@ -130,26 +149,21 @@
   <button class="btn btn-blue" onclick="verifyCode()">Next ➡️</button>
 </div>
 
-<!-- PLAYER LOBBY STEP 2: Character Creation -->
 <div id="lobbyStep2">
   <h2>Setup Profile</h2>
   <input type="text" id="playerName" placeholder="Your Name" maxlength="12"><br>
-
   <p>Pick your Stickman Color:</p>
   <div class="color-picker-wrap">
     <div id="colorPreview" style="background:#43e97b;"></div>
     <canvas id="colorWheelCanvas" width="160" height="160"></canvas>
   </div>
-
   <p>Select your Role:</p>
   <div class="roles-grid" id="rolesContainer"></div>
   <p id="roleDescription">Tap or hover a role to see what it does.</p>
-
   <p id="step2Error" style="color: #ffb199; height: 20px;"></p>
   <button class="btn btn-green" style="width: 100%; max-width: 300px;" onclick="attemptJoin()">JOIN GAME</button>
 </div>
 
-<!-- PLAYER: Reclaim a seat after being disconnected mid-game -->
 <div id="lobbyRejoin" style="display:none; padding: 20px;">
   <h2>Welcome back!</h2>
   <p style="color:#aaa;">The game's already running. Are you one of these survivors?</p>
@@ -157,30 +171,70 @@
   <p id="rejoinError" style="color: #ffb199; height: 20px;"></p>
 </div>
 
-<!-- PLAYER: Waiting for host to start -->
 <div id="clientWaiting">
   <h2 class="pulse">You're in! 🎉</h2>
   <p id="waitingName" style="color: #4facfe; font-size: 20px;"></p>
   <p style="color: #aaa;">Waiting for the host to start the game...</p>
 </div>
 
-<!-- PLAYER CONTROLLER -->
 <div id="clientController">
   <h2 id="controllerName">Survivor</h2>
   <h3 id="controllerRole" style="color: #4facfe; margin-top: -10px;"></h3>
   <div class="controller-bars">
-    <div class="stat-label"><span>❤️ Health</span><span id="controllerHealthNum">100</span></div>
-    <div class="bar-track"><div class="bar-fill" id="controllerHealthBar" style="width:100%; background:#ff0844;"></div></div>
-    <div class="stat-label"><span>🍞 Hunger</span><span id="controllerHungerNum">100</span></div>
-    <div class="bar-track"><div class="bar-fill" id="controllerHungerBar" style="width:100%; background:#43e97b;"></div></div>
+    <div class="stat-row">
+      <div class="stat-label"><span>❤️ Health</span><span id="controllerHealthNum">100</span></div>
+      <div class="bar-track"><div class="bar-fill" id="controllerHealthBar" style="width:100%; background:#ff0844;"></div></div>
+      <div class="stat-blocks" id="controllerHealthBlocks">██████████ 100</div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-label"><span>🍞 Food</span><span id="controllerHungerNum">100</span></div>
+      <div class="bar-track"><div class="bar-fill" id="controllerHungerBar" style="width:100%; background:#43e97b;"></div></div>
+      <div class="stat-blocks" id="controllerHungerBlocks">██████████ 100</div>
+    </div>
   </div>
   <p id="controllerDead" style="color:#ffb199; font-weight:bold; display:none;">💀 Eliminated</p>
-  <div class="controls">
-    <button class="ctrl-btn" id="btnLeft">⬅️</button>
-    <button class="ctrl-btn" id="btnJump">⬆️</button>
-    <button class="ctrl-btn" id="btnRight">➡️</button>
+
+  <div class="lookout-detect-panel" id="lookoutDetectPanel">
+    <p style="margin:0 0 8px;font-size:14px;">🔭 Something's coming — detect it!</p>
+    <button class="btn btn-red btn-sm" id="btnDetect" onclick="detectDisaster()">DETECT DISASTER</button>
+  </div>
+
+  <div class="swap-panel">
+    <button class="btn btn-gray btn-sm" onclick="toggleSwapPanel()">🔄 Request Role Swap</button>
+    <div id="swapPlayerList" style="display:none; margin-top:8px;"></div>
+  </div>
+
+  <div class="controls" id="controlPad">
+    <button class="ctrl-btn" id="btnLeft" aria-label="Move left">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+    <button class="ctrl-btn" id="btnJump" aria-label="Jump">
+      <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" transform="rotate(-90 12 12)"/></svg>
+    </button>
+    <button class="ctrl-btn" id="btnRight" aria-label="Move right">
+      <svg viewBox="0 0 24 24"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+    </button>
   </div>
 </div>
+
+<!-- Disaster warning overlays (projector + all controllers) -->
+<div class="disaster-overlay large" id="disasterOverlayLarge">
+  <div class="warn-text" id="disasterWarnLargeText">⚠ TYPHOON INCOMING!</div>
+</div>
+<div class="disaster-overlay small" id="disasterOverlaySmall">
+  <div class="warn-text" id="disasterWarnSmallText" style="font-size: clamp(18px, 5vw, 32px);">⚠ Typhoon detected by Lookout</div>
+</div>
+
+<div class="modal-backdrop" id="swapModal">
+  <div class="modal-box">
+    <h3>Role Swap Request</h3>
+    <p id="swapModalText"></p>
+    <button class="btn btn-green btn-sm" onclick="respondSwap(true)">Accept</button>
+    <button class="btn btn-red btn-sm" onclick="respondSwap(false)">Decline</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -188,24 +242,48 @@
   let playersData = {};
   let selectedRoleId = null;
   let storedJoinCode = "";
-
   let gameStarted = false;
-  let activeEvent = null;   // { id, name, icon, duration, hint }
+  let activeEvent = null;
   let eventEndsAt = 0;
   let particles = [];
-  let waterLevel = 0;       // 0..1 for tsunami
-  let shakeAmount = 0;      // for earthquake
+  let waterLevel = 0;
+  let shakeAmount = 0;
   let myRoleId = null;
   let selectedColor = '#43e97b';
+  let currentRound = 1;
+  let totalRounds = 10;
+  let pendingSwapFrom = null;
+  let moveState = { left: false, right: false };
 
-  // --- CIRCULAR COLOR WHEEL ---
+  function formatStatBlocks(value, total = 10) {
+    const pct = Math.max(0, Math.min(100, value));
+    const filled = Math.round((pct / 100) * total);
+    return '█'.repeat(filled) + '░'.repeat(total - filled) + ' ' + Math.round(pct);
+  }
+
+  function updateStatDisplay(prefix, value) {
+    const bar = document.getElementById(prefix + 'Bar');
+    const num = document.getElementById(prefix + 'Num');
+    const blocks = document.getElementById(prefix + 'Blocks');
+    if (bar) bar.style.width = value + '%';
+    if (num) num.innerText = Math.round(value);
+    if (blocks) blocks.innerText = formatStatBlocks(value);
+  }
+
+  function showToast(msg, ms = 3000) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), ms);
+  }
+
+  // --- COLOR WHEEL ---
   function hslToRgb(h, s, l) {
     let r, g, b;
     if (s === 0) { r = g = b = l; }
     else {
       const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
+        if (t < 0) t += 1; if (t > 1) t -= 1;
         if (t < 1/6) return p + (q - p) * 6 * t;
         if (t < 1/2) return q;
         if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
@@ -222,41 +300,32 @@
   function rgbToHex(r, g, b) {
     return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
   }
-
   function drawColorWheel() {
     const canvas = document.getElementById('colorWheelCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const w = canvas.width, h = canvas.height;
-    const cx = w/2, cy = h/2, radius = w/2;
+    const w = canvas.width, h = canvas.height, cx = w/2, cy = h/2, radius = w/2;
     const img = ctx.createImageData(w, h);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const dx = x - cx, dy = y - cy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const idx = (y * w + x) * 4;
+        const dx = x - cx, dy = y - cy, dist = Math.sqrt(dx*dx + dy*dy), idx = (y * w + x) * 4;
         if (dist <= radius) {
           let angle = Math.atan2(dy, dx) * 180 / Math.PI;
           if (angle < 0) angle += 360;
           const sat = Math.min(1, dist / radius);
           const [r,g,b] = hslToRgb(angle/360, sat, 0.5);
           img.data[idx] = r; img.data[idx+1] = g; img.data[idx+2] = b; img.data[idx+3] = 255;
-        } else {
-          img.data[idx+3] = 0;
-        }
+        } else img.data[idx+3] = 0;
       }
     }
     ctx.putImageData(img, 0, 0);
   }
-
   function pickColorAt(clientX, clientY) {
     const canvas = document.getElementById('colorWheelCanvas');
     const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const x = clientX - rect.left, y = clientY - rect.top;
     const cx = canvas.width/2, cy = canvas.height/2, radius = canvas.width/2;
-    const dx = x - cx, dy = y - cy;
-    const dist = Math.min(radius, Math.sqrt(dx*dx + dy*dy));
+    const dx = x - cx, dy = y - cy, dist = Math.min(radius, Math.sqrt(dx*dx + dy*dy));
     let angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle < 0) angle += 360;
     const sat = dist / radius;
@@ -264,7 +333,6 @@
     selectedColor = rgbToHex(r,g,b);
     document.getElementById('colorPreview').style.background = selectedColor;
   }
-
   function setupColorWheel() {
     const canvas = document.getElementById('colorWheelCanvas');
     if (!canvas || canvas.dataset.ready) return;
@@ -278,30 +346,73 @@
 
   const HOUSE = { groundY: 450, roofY: 100, leftX: 50, rightX: 750, floor2Y: 280 };
 
-  // --- SCREEN SWITCHING ---
   function showOnly(id) {
     ['setup','hostView','lobbyStep1','lobbyStep2','lobbyRejoin','clientWaiting','clientController'].forEach(s => {
       document.getElementById(s).style.display = (s === id) ? 'block' : 'none';
     });
   }
 
-  function setHost() {
-    showOnly('hostView');
-    socket.emit('requestHostData');
-    requestAnimationFrame(gameLoop);
+  function setHost() { showOnly('hostView'); socket.emit('requestHostData'); requestAnimationFrame(gameLoop); }
+  function setPlayer() { showOnly('lobbyStep1'); setupColorWheel(); }
+
+  // --- DISASTER WARNINGS ---
+  function showDisasterWarning(ev, size) {
+    const name = ev.name.toUpperCase();
+    if (size === 'large') {
+      document.getElementById('disasterWarnLargeText').innerText = `⚠ ${name} INCOMING!`;
+      document.getElementById('disasterOverlayLarge').classList.add('visible');
+      document.getElementById('disasterOverlaySmall').classList.remove('visible');
+    } else {
+      document.getElementById('disasterWarnSmallText').innerText = `⚠ ${ev.icon} ${name} — Lookout detected early`;
+      document.getElementById('disasterOverlaySmall').classList.add('visible');
+      document.getElementById('disasterOverlayLarge').classList.remove('visible');
+    }
   }
 
-  function setPlayer() {
-    showOnly('lobbyStep1');
-    setupColorWheel();
+  function hideDisasterWarning() {
+    document.getElementById('disasterOverlayLarge').classList.remove('visible');
+    document.getElementById('disasterOverlaySmall').classList.remove('visible');
   }
 
-  // --- HOST LOGIC ---
+  socket.on('disasterWarning', (data) => {
+    document.getElementById('lookoutDetectPanel').classList.remove('visible');
+    showDisasterWarning(data.event, data.size);
+    setTimeout(hideDisasterWarning, data.durationMs || 5000);
+  });
+
+  socket.on('lookoutEarlyWarning', () => {
+    document.getElementById('lookoutDetectPanel').classList.add('visible');
+  });
+
+  function detectDisaster() {
+    socket.emit('detectDisaster');
+  }
+
+  socket.on('detectSuccess', (data) => {
+    document.getElementById('lookoutDetectPanel').classList.remove('visible');
+    showToast(data.message);
+  });
+
+  socket.on('roundUpdate', (data) => {
+    currentRound = data.current;
+    totalRounds = data.total;
+    const el = document.getElementById('hostRoundDisplay');
+    if (el) {
+      el.style.display = 'block';
+      el.innerText = `Round ${currentRound} / ${totalRounds}`;
+    }
+  });
+
+  // --- HOST ---
   socket.on('hostData', (data) => {
     document.getElementById('hostRoomCode').innerText = data.roomCode;
     gameStarted = data.gameStarted;
+    currentRound = data.currentRound || 1;
+    totalRounds = data.totalRounds || 10;
     document.getElementById('hostLobby').style.display = gameStarted ? 'none' : 'block';
     document.getElementById('hostGame').style.display = gameStarted ? 'block' : 'none';
+    const rd = document.getElementById('hostRoundDisplay');
+    if (rd && gameStarted) { rd.style.display = 'block'; rd.innerText = `Round ${currentRound} / ${totalRounds}`; }
   });
 
   socket.on('updatePlayers', (data) => {
@@ -309,8 +420,17 @@
     updateSidebar();
     updateLobbyList();
     const count = Object.keys(playersData).length;
-    document.getElementById('startGameBtn').disabled = count === 0;
+    const btn = document.getElementById('startGameBtn');
+    if (btn) btn.disabled = count === 0;
+    if (myRoleId && data[myRoleId]) updateControllerStats(data[myRoleId]);
+    if (document.getElementById('swapPlayerList').style.display === 'block') renderSwapPlayerList();
   });
+
+  function updateControllerStats(me) {
+    updateStatDisplay('controllerHealth', me.health);
+    updateStatDisplay('controllerHunger', me.hunger);
+    document.getElementById('controllerDead').style.display = me.isAlive ? 'none' : 'block';
+  }
 
   function updateLobbyList() {
     const list = document.getElementById('lobbyPlayerList');
@@ -323,12 +443,7 @@
     }
     ids.forEach(id => {
       const p = playersData[id];
-      list.innerHTML += `
-        <div class="lobby-player">
-          <span class="swatch" style="background:${p.color}"></span>
-          <strong>${p.name}</strong>
-          <span style="color:#aaa;">${p.roleIcon} ${p.roleName}</span>
-        </div>`;
+      list.innerHTML += `<div class="lobby-player"><span class="swatch" style="background:${p.color}"></span><strong>${p.name}</strong><span style="color:#aaa;">${p.roleIcon} ${p.roleName}</span></div>`;
     });
   }
 
@@ -345,10 +460,12 @@
             <div><strong>${p.name}</strong><br><span style="font-size:12px;color:#aaa;">${p.roleIcon} ${p.roleName}</span></div>
             <div style="font-size:11px;font-weight:bold;">${p.isAlive ? '' : 'ELIMINATED'}</div>
           </div>
-          <div style="font-size:11px;color:#aaa;margin-top:6px;">❤️ Health ${p.health}</div>
+          <div class="stat-label" style="margin-top:6px;"><span>❤️ Health</span><span>${Math.round(p.health)}</span></div>
           <div class="bar-track"><div class="bar-fill" style="width:${p.health}%; background:#ff0844;"></div></div>
-          <div style="font-size:11px;color:#aaa;margin-top:6px;">🍞 Hunger ${p.hunger}</div>
+          <div class="stat-blocks">${formatStatBlocks(p.health)}</div>
+          <div class="stat-label" style="margin-top:6px;"><span>🍞 Food</span><span>${Math.round(p.hunger)}</span></div>
           <div class="bar-track"><div class="bar-fill" style="width:${p.hunger}%; background:#43e97b;"></div></div>
+          <div class="stat-blocks">${formatStatBlocks(p.hunger)}</div>
         </div>`;
     }
   }
@@ -357,20 +474,14 @@
 
   socket.on('gameStarted', () => {
     gameStarted = true;
-    const lobby = document.getElementById('hostLobby');
-    const game = document.getElementById('hostGame');
-    if (lobby) lobby.style.display = 'none';
-    if (game) game.style.display = 'block';
-    // If this client is a player, switch them to the controller
-    if (document.getElementById('clientWaiting').style.display === 'block') {
-      showOnly('clientController');
-    }
+    document.getElementById('hostLobby').style.display = 'none';
+    document.getElementById('hostGame').style.display = 'block';
+    document.getElementById('hostRoundDisplay').style.display = 'block';
+    if (document.getElementById('clientWaiting').style.display === 'block') showOnly('clientController');
   });
 
   function resetGame() { socket.emit('resetGame'); }
   socket.on('gameReset', () => { location.reload(); });
-
-  function triggerEvent(id) { socket.emit('triggerEvent', id); }
 
   socket.on('eventStart', (ev) => {
     activeEvent = ev;
@@ -378,6 +489,8 @@
     particles = [];
     waterLevel = 0;
     shakeAmount = 0;
+    document.getElementById('lookoutDetectPanel').classList.remove('visible');
+    hideDisasterWarning();
   });
 
   socket.on('eventEnd', () => {
@@ -387,25 +500,17 @@
     shakeAmount = 0;
   });
 
-  // --- CLIENT (PLAYER) UI LOGIC ---
+  // --- PLAYER LOBBY ---
   function verifyCode() {
     const code = document.getElementById('joinCode').value.trim();
-    if (!code) {
-      document.getElementById('step1Error').innerText = "Please enter a code!";
-      return;
-    }
+    if (!code) { document.getElementById('step1Error').innerText = "Please enter a code!"; return; }
     storedJoinCode = code;
     socket.emit('verifyRoom', code);
   }
 
   socket.on('roomVerified', (data) => {
-    if (data.rejoin) {
-      showOnly('lobbyRejoin');
-      renderRejoinOptions(data.options);
-    } else {
-      showOnly('lobbyStep2');
-      renderRoles(data.roles);
-    }
+    if (data.rejoin) { showOnly('lobbyRejoin'); renderRejoinOptions(data.options); }
+    else { showOnly('lobbyStep2'); renderRoles(data.roles); }
   });
 
   function renderRejoinOptions(options) {
@@ -424,20 +529,19 @@
     myRoleId = me.roleId;
     document.getElementById('controllerName').innerText = me.name;
     document.getElementById('controllerRole').innerText = `${me.roleIcon} ${me.roleName}`;
+    updateControllerStats(me);
     showOnly('clientController');
   });
 
   socket.on('joinError', (msg) => {
-    const e1 = document.getElementById('step1Error');
-    const e2 = document.getElementById('step2Error');
-    if (e1) e1.innerText = msg;
-    if (e2) e2.innerText = msg;
+    ['step1Error','step2Error','rejoinError'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.offsetParent !== null) el.innerText = msg;
+    });
   });
 
   socket.on('updateRoles', (roles) => {
-    if (document.getElementById('lobbyStep2').style.display === 'block') {
-      renderRoles(roles);
-    }
+    if (document.getElementById('lobbyStep2').style.display === 'block') renderRoles(roles);
   });
 
   function renderRoles(roles) {
@@ -453,9 +557,7 @@
       } else {
         div.innerHTML = content;
         if (selectedRoleId === role.id) div.classList.add('selected');
-        div.onmouseenter = () => {
-          document.getElementById('roleDescription').innerText = `${role.icon} ${role.name}: ${role.description || ''}`;
-        };
+        div.onmouseenter = () => { document.getElementById('roleDescription').innerText = `${role.icon} ${role.name}: ${role.description || ''}`; };
         div.onclick = () => {
           selectedRoleId = role.id;
           document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
@@ -483,42 +585,97 @@
     showOnly('clientWaiting');
   });
 
-  socket.on('updatePlayers', (data) => {
-    if (myRoleId && data[myRoleId]) {
-      const me = data[myRoleId];
-      const hpBar = document.getElementById('controllerHealthBar');
-      const hgBar = document.getElementById('controllerHungerBar');
-      if (hpBar) {
-        hpBar.style.width = me.health + '%';
-        document.getElementById('controllerHealthNum').innerText = me.health;
-        hgBar.style.width = me.hunger + '%';
-        document.getElementById('controllerHungerNum').innerText = me.hunger;
-        document.getElementById('controllerDead').style.display = me.isAlive ? 'none' : 'block';
-      }
+  // --- ROLE SWAP ---
+  function toggleSwapPanel() {
+    const list = document.getElementById('swapPlayerList');
+    list.style.display = list.style.display === 'none' ? 'block' : 'none';
+    if (list.style.display === 'block') renderSwapPlayerList();
+  }
+
+  function renderSwapPlayerList() {
+    const list = document.getElementById('swapPlayerList');
+    list.innerHTML = '';
+    for (const id in playersData) {
+      if (id === myRoleId) continue;
+      const p = playersData[id];
+      if (!p.connected || !p.isAlive) continue;
+      const btn = document.createElement('button');
+      btn.className = 'swap-player-btn';
+      btn.innerText = `${p.roleIcon} ${p.name} (${p.roleName})`;
+      btn.onclick = () => { socket.emit('requestRoleSwap', id); list.style.display = 'none'; };
+      list.appendChild(btn);
     }
+    if (!list.children.length) list.innerHTML = '<p style="color:#888;font-size:13px;">No players available to swap with.</p>';
+  }
+
+  socket.on('roleSwapRequest', (data) => {
+    pendingSwapFrom = data.fromRoleId;
+    document.getElementById('swapModalText').innerText =
+      `${data.fromRoleIcon} ${data.fromName} (${data.fromRoleName}) wants to swap roles with you.`;
+    document.getElementById('swapModal').classList.add('visible');
   });
 
-  // --- Hold-to-move controls (pointer events cover mouse + touch, no double-fire) ---
-  function bindHoldButton(id, onDown, onUp) {
+  function respondSwap(accept) {
+    document.getElementById('swapModal').classList.remove('visible');
+    socket.emit('respondRoleSwap', { accept });
+    pendingSwapFrom = null;
+  }
+
+  socket.on('swapRequestSent', (data) => showToast(`Swap request sent to ${data.targetName}`));
+  socket.on('swapDeclined', (data) => showToast(`${data.byName} declined your swap request.`));
+  socket.on('swapComplete', (data) => showToast(data.message));
+  socket.on('swapError', (msg) => showToast(msg));
+  socket.on('roleSwapped', (me) => {
+    myRoleId = me.roleId;
+    document.getElementById('controllerRole').innerText = `${me.roleIcon} ${me.roleName}`;
+    showToast(`You are now ${me.roleIcon} ${me.roleName}!`);
+  });
+
+  // --- MOBILE CONTROLS: simultaneous move + jump ---
+  function bindControlButton(id, direction) {
     const btn = document.getElementById(id);
     if (!btn) return;
-    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); onDown(); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => btn.addEventListener(evt, onUp));
-  }
-  bindHoldButton('btnLeft', () => socket.emit('moveStart', 'left'), () => socket.emit('moveStop', 'left'));
-  bindHoldButton('btnRight', () => socket.emit('moveStart', 'right'), () => socket.emit('moveStop', 'right'));
-  const jumpBtn = document.getElementById('btnJump');
-  if (jumpBtn) jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); socket.emit('jump'); });
 
-  // --- HOST CANVAS RENDER LOOP ---
+    const onDown = (e) => {
+      e.preventDefault();
+      if (direction === 'jump') {
+        socket.emit('jump');
+      } else {
+        moveState[direction] = true;
+        btn.classList.add('active');
+        socket.emit('moveStart', direction);
+      }
+    };
+    const onUp = (e) => {
+      if (e) e.preventDefault();
+      if (direction !== 'jump' && moveState[direction]) {
+        moveState[direction] = false;
+        btn.classList.remove('active');
+        socket.emit('moveStop', direction);
+      }
+    };
+
+    btn.addEventListener('pointerdown', onDown);
+    btn.addEventListener('pointerup', onUp);
+    btn.addEventListener('pointerleave', onUp);
+    btn.addEventListener('pointercancel', onUp);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  bindControlButton('btnLeft', 'left');
+  bindControlButton('btnRight', 'right');
+  bindControlButton('btnJump', 'jump');
+
+  // Prevent accidental selection on control pad
+  document.getElementById('controlPad').addEventListener('selectstart', (e) => e.preventDefault());
+
+  // --- CANVAS ---
   const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas ? canvas.getContext('2d') : null;
 
   function drawHouse() {
-    // ground
     ctx.fillStyle = '#4a3b32';
     ctx.fillRect(0, HOUSE.groundY, 800, 50);
-    // house frame
     ctx.strokeStyle = '#c9a66b';
     ctx.lineWidth = 6;
     ctx.beginPath();
@@ -528,14 +685,12 @@
     ctx.lineTo(HOUSE.rightX, HOUSE.roofY + 100);
     ctx.lineTo(HOUSE.rightX, HOUSE.groundY);
     ctx.stroke();
-    // second floor divider (double-story house)
     ctx.strokeStyle = 'rgba(201,166,107,0.5)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(HOUSE.leftX, HOUSE.floor2Y);
     ctx.lineTo(HOUSE.rightX, HOUSE.floor2Y);
     ctx.stroke();
-    // a couple windows for flavor
     ctx.fillStyle = 'rgba(255,220,120,0.25)';
     ctx.fillRect(150, 340, 60, 60);
     ctx.fillRect(590, 340, 60, 60);
@@ -546,95 +701,89 @@
   function drawStickman(p) {
     const feetY = HOUSE.groundY - (p.offsetY || 0);
     const headY = feetY - 55;
-
     ctx.strokeStyle = p.color;
     ctx.fillStyle = p.color;
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
-
-    // head
     ctx.beginPath();
     ctx.arc(p.x, headY, 10, 0, Math.PI * 2);
     ctx.fill();
-    // body
     ctx.beginPath();
     ctx.moveTo(p.x, headY + 10);
     ctx.lineTo(p.x, headY + 40);
     ctx.stroke();
-    // arms
     ctx.beginPath();
     ctx.moveTo(p.x - 15, headY + 20);
     ctx.lineTo(p.x + 15, headY + 20);
     ctx.stroke();
-    // legs
     ctx.beginPath();
     ctx.moveTo(p.x, headY + 40);
     ctx.lineTo(p.x - 12, feetY);
     ctx.moveTo(p.x, headY + 40);
     ctx.lineTo(p.x + 12, feetY);
     ctx.stroke();
-
     if (!p.isAlive) {
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(p.x - 25, headY - 15, 50, 90);
     }
-
-    // name + role tag
     ctx.fillStyle = 'white';
     ctx.font = 'bold 12px Poppins, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`${p.roleIcon} ${p.name}`, p.x, headY - 20);
   }
 
-  function drawEventEffects() {
+  function updateParticles(progress) {
+    if (!activeEvent) return;
+    if (activeEvent.id === 'earthquake') {
+      shakeAmount = 6;
+    } else if (activeEvent.id === 'typhoon') {
+      if (Math.random() < 0.5) particles.push({ type: 'wind', x: -10, y: Math.random() * 400 + 50, vx: Math.random() * 6 + 6, len: Math.random() * 20 + 10 });
+      particles.forEach(pt => { pt.x += pt.vx; pt.y += pt.vx / 4; });
+      particles = particles.filter(pt => pt.x < 850);
+    } else if (activeEvent.id === 'tsunami') {
+      waterLevel = Math.min(0.55, progress * 0.6);
+    } else if (activeEvent.id === 'meteor_shower') {
+      if (Math.random() < 0.15) particles.push({ type: 'meteor', x: Math.random() * 700 + 50, y: -20, speed: Math.random() * 5 + 6 });
+      particles.forEach(m => { m.y += m.speed; });
+      particles = particles.filter(m => m.y < HOUSE.groundY + 20);
+    }
+  }
+
+  function drawEventEffectsForeground() {
     if (!activeEvent) return;
     const remaining = Math.max(0, eventEndsAt - Date.now());
     const progress = 1 - remaining / activeEvent.duration;
 
-    if (activeEvent.id === 'earthquake') {
-      shakeAmount = 6;
-    } else if (activeEvent.id === 'typhoon') {
-      if (Math.random() < 0.5) {
-        particles.push({ x: -10, y: Math.random() * 400 + 50, vx: Math.random() * 6 + 6, len: Math.random() * 20 + 10 });
-      }
+    if (activeEvent.id === 'typhoon') {
       ctx.strokeStyle = 'rgba(200,220,255,0.6)';
       ctx.lineWidth = 2;
-      particles.forEach(pt => {
+      particles.filter(pt => pt.type === 'wind').forEach(pt => {
         ctx.beginPath();
         ctx.moveTo(pt.x, pt.y);
         ctx.lineTo(pt.x - pt.len, pt.y - pt.len / 3);
         ctx.stroke();
-        pt.x += pt.vx;
-        pt.y += pt.vx / 4;
       });
-      particles = particles.filter(pt => pt.x < 850);
     } else if (activeEvent.id === 'tsunami') {
-      waterLevel = Math.min(0.55, progress * 0.6);
       const waterY = HOUSE.groundY - waterLevel * (HOUSE.groundY - HOUSE.roofY);
       ctx.fillStyle = 'rgba(40,110,180,0.55)';
       ctx.fillRect(0, waterY, 800, HOUSE.groundY - waterY + 50);
       ctx.strokeStyle = 'rgba(255,255,255,0.4)';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      for (let x = 0; x <= 800; x += 20) {
-        ctx.lineTo(x, waterY + Math.sin((x + Date.now() / 100) / 30) * 4);
-      }
+      for (let x = 0; x <= 800; x += 20) ctx.lineTo(x, waterY + Math.sin((x + Date.now() / 100) / 30) * 4);
       ctx.stroke();
-    } else if (activeEvent.id === 'meteor') {
-      if (Math.random() < 0.15) {
-        particles.push({ x: Math.random() * 700 + 50, y: -20, speed: Math.random() * 5 + 6 });
-      }
+    } else if (activeEvent.id === 'meteor_shower') {
       ctx.fillStyle = '#ff8c42';
-      particles.forEach(m => {
+      ctx.shadowColor = '#ff4500';
+      ctx.shadowBlur = 8;
+      particles.filter(m => m.type === 'meteor').forEach(m => {
         ctx.beginPath();
         ctx.arc(m.x, m.y, 8, 0, Math.PI * 2);
         ctx.fill();
-        m.y += m.speed;
       });
-      particles = particles.filter(m => m.y < HOUSE.groundY);
+      ctx.shadowBlur = 0;
     }
 
-    // banner
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(0, 10, 800, 30);
@@ -648,6 +797,7 @@
   }
 
   function gameLoop() {
+    if (!ctx) return;
     ctx.save();
     ctx.clearRect(0, 0, 800, 500);
 
@@ -657,7 +807,13 @@
 
     drawHouse();
     for (let id in playersData) drawStickman(playersData[id]);
-    drawEventEffects();
+
+    if (activeEvent) {
+      const remaining = Math.max(0, eventEndsAt - Date.now());
+      const progress = 1 - remaining / activeEvent.duration;
+      updateParticles(progress);
+      drawEventEffectsForeground();
+    }
 
     ctx.restore();
     requestAnimationFrame(gameLoop);

@@ -5,33 +5,60 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
+const DisasterManager = require('./lib/disasterManager');
+const RoleManager = require('./lib/roleManager');
+
 app.use(express.static(__dirname));
 
-// Load roles + events from config.json so they're easy to tweak
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const events = config.events;
 
 const GRAVITY = 1.3;
 const JUMP_SPEED = 15;
 const MOVE_SPEED = 6;
-const TICK_MS = 50; // 20fps physics/broadcast tick
+const TICK_MS = 50;
 
 // --- Game State ---
-// players is keyed by roleId (STABLE across reconnects) instead of socket.id
 let players = {};
-let socketToRole = {}; // socket.id -> roleId, only for currently-connected sockets
+let socketToRole = {};
 let roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 let gameStarted = false;
-let activeEvent = null;
+let currentRound = 0;
 let roles = config.roles.map(r => ({ ...r, takenBy: null }));
+
+// Future-ready placeholders (v1.2+)
+let shelterIntegrity = 100;
+let pendingRequests = [];
+
+const disasterManager = new DisasterManager({
+  events,
+  io,
+  getPlayers: () => players,
+  getGameStarted: () => gameStarted,
+  onDisasterEnd: () => {
+    currentRound++;
+    io.emit('roundUpdate', { current: currentRound, total: config.gameSettings?.totalRounds || 10 });
+  }
+});
+
+const roleManager = new RoleManager({
+  getRoles: () => roles,
+  getPlayers: () => players,
+  getSocketToRole: () => socketToRole,
+  io
+});
 
 function resetGame() {
   players = {};
   socketToRole = {};
   roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
   gameStarted = false;
-  activeEvent = null;
+  currentRound = 0;
+  shelterIntegrity = 100;
+  pendingRequests = [];
   roles = config.roles.map(r => ({ ...r, takenBy: null }));
+  disasterManager.reset();
+  roleManager.reset();
 }
 
 function makeFreshPlayer(roleDef, data) {
@@ -48,8 +75,19 @@ function makeFreshPlayer(roleDef, data) {
     health: 100,
     hunger: 100,
     isAlive: true,
-    connected: true
+    connected: true,
+    socketId: null,
+    inventory: []
   };
+}
+
+function attachSocket(player, socketId) {
+  if (player) player.socketId = socketId;
+}
+
+function broadcastGameState() {
+  io.emit('updatePlayers', players);
+  io.emit('updateRoles', roles);
 }
 
 io.on('connection', (socket) => {
@@ -57,7 +95,13 @@ io.on('connection', (socket) => {
 
   // --- HOST ---
   socket.on('requestHostData', () => {
-    socket.emit('hostData', { roomCode, gameStarted });
+    socket.emit('hostData', {
+      roomCode,
+      gameStarted,
+      currentRound,
+      totalRounds: config.gameSettings?.totalRounds || 10,
+      shelterIntegrity
+    });
     socket.emit('updatePlayers', players);
     socket.emit('updateRoles', roles);
   });
@@ -65,15 +109,19 @@ io.on('connection', (socket) => {
   socket.on('startGame', () => {
     if (Object.keys(players).length === 0) return;
     gameStarted = true;
+    currentRound = 1;
     io.emit('gameStarted');
+    io.emit('roundUpdate', { current: currentRound, total: config.gameSettings?.totalRounds || 10 });
+    disasterManager.startAutoSchedule();
   });
 
   socket.on('resetGame', () => {
+    disasterManager.stopAutoSchedule();
     resetGame();
     io.emit('gameReset');
   });
 
-  // --- PLAYER: Step 1, verify room code ---
+  // --- PLAYER: verify room code ---
   socket.on('verifyRoom', (code) => {
     if ((code || '').toUpperCase() !== roomCode) {
       return socket.emit('joinError', 'Invalid room code — check the projector screen!');
@@ -83,7 +131,6 @@ io.on('connection', (socket) => {
       return socket.emit('roomVerified', { rejoin: false, roles });
     }
 
-    // Game already running — only allow reclaiming a seat that got disconnected
     const options = Object.values(players)
       .filter(p => !p.connected)
       .map(p => ({ roleId: p.roleId, name: p.name, roleIcon: p.roleIcon, roleName: p.roleName }));
@@ -94,19 +141,18 @@ io.on('connection', (socket) => {
     socket.emit('roomVerified', { rejoin: true, options });
   });
 
-  // --- PLAYER: reclaim a seat after being disconnected mid-game ---
   socket.on('reclaimSeat', (data) => {
     const p = players[data.roleId];
     if (!p || p.connected) {
       return socket.emit('joinError', 'That seat is no longer available.');
     }
     p.connected = true;
+    attachSocket(p, socket.id);
     socketToRole[socket.id] = data.roleId;
     socket.emit('rejoinSuccess', p);
     io.emit('updatePlayers', players);
   });
 
-  // --- PLAYER: Step 2, finalize a fresh join (lobby only) ---
   socket.on('joinGame', (data) => {
     if (gameStarted) {
       return socket.emit('joinError', 'The game has already started!');
@@ -121,6 +167,7 @@ io.on('connection', (socket) => {
 
     roles[roleIndex].takenBy = name;
     const player = makeFreshPlayer(roles[roleIndex], data);
+    attachSocket(player, socket.id);
     players[data.roleId] = player;
     socketToRole[socket.id] = data.roleId;
 
@@ -129,7 +176,7 @@ io.on('connection', (socket) => {
     socket.emit('joinSuccess', player);
   });
 
-  // --- PLAYER: movement (only works once game has started) ---
+  // --- Movement ---
   socket.on('moveStart', (direction) => {
     const p = players[socketToRole[socket.id]];
     if (!gameStarted || !p || !p.isAlive) return;
@@ -145,40 +192,66 @@ io.on('connection', (socket) => {
   socket.on('jump', () => {
     const p = players[socketToRole[socket.id]];
     if (!gameStarted || !p || !p.isAlive) return;
-    if (p.offsetY === 0) p.vy = JUMP_SPEED; // only jump while grounded
+    if (p.offsetY === 0) p.vy = JUMP_SPEED;
   });
 
-  // --- HOST: trigger one of the 4 disaster events ---
-  socket.on('triggerEvent', (eventId) => {
-    if (!gameStarted || activeEvent) return;
-    const ev = events.find(e => e.id === eventId);
-    if (!ev) return;
+  // --- Lookout: detect incoming disaster during early window ---
+  socket.on('detectDisaster', () => {
+    const roleId = socketToRole[socket.id];
+    const p = players[roleId];
+    if (!p || p.roleName !== 'Lookout') return;
+    if (disasterManager.markDetected()) {
+      socket.emit('detectSuccess', { message: 'Disaster detected! Team gets a calm heads-up.' });
+    }
+  });
 
-    activeEvent = ev.id;
-    io.emit('eventStart', ev);
+  // --- Role swap ---
+  socket.on('requestRoleSwap', (targetRoleId) => {
+    const fromRoleId = socketToRole[socket.id];
+    if (!fromRoleId || !gameStarted) return;
 
-    const TICKS = 5;
-    let tick = 0;
-    const tickMs = ev.duration / TICKS;
+    const result = roleManager.requestSwap(fromRoleId, targetRoleId);
+    if (!result.ok) {
+      return socket.emit('swapError', result.error);
+    }
 
-    const interval = setInterval(() => {
-      tick++;
-      for (const rid in players) {
-        const p = players[rid];
-        if (!p.isAlive) continue;
-        const dmg = Math.floor(Math.random() * (ev.damage[1] - ev.damage[0] + 1)) + ev.damage[0];
-        p.health = Math.max(0, p.health - Math.round(dmg / TICKS));
-        p.hunger = Math.max(0, p.hunger - 3);
-        if (p.health <= 0) p.isAlive = false;
+    socket.emit('swapRequestSent', { targetName: result.targetName });
+    const target = players[targetRoleId];
+    if (target && target.socketId) {
+      io.to(target.socketId).emit('roleSwapRequest', {
+        fromRoleId,
+        fromName: players[fromRoleId].name,
+        fromRoleName: players[fromRoleId].roleName,
+        fromRoleIcon: players[fromRoleId].roleIcon
+      });
+    }
+  });
+
+  socket.on('respondRoleSwap', (data) => {
+    const toRoleId = socketToRole[socket.id];
+    if (!toRoleId) return;
+
+    const result = roleManager.respondSwap(toRoleId, !!data.accept);
+    if (!result.ok) {
+      return socket.emit('swapError', result.error);
+    }
+
+    if (result.accepted && result.swapped) {
+      broadcastGameState();
+      result.swapped.forEach(({ roleId, player }) => {
+        if (player.socketId) {
+          io.to(player.socketId).emit('roleSwapped', player);
+        }
+      });
+      io.emit('swapComplete', {
+        message: `${result.swapped[0].player.name} and ${result.swapped[1].player.name} swapped roles!`
+      });
+    } else if (!result.accepted) {
+      const from = players[result.fromRoleId];
+      if (from && from.socketId) {
+        io.to(from.socketId).emit('swapDeclined', { byName: players[toRoleId].name });
       }
-      io.emit('updatePlayers', players);
-      if (tick >= TICKS) clearInterval(interval);
-    }, tickMs);
-
-    setTimeout(() => {
-      activeEvent = null;
-      io.emit('eventEnd');
-    }, ev.duration);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -186,12 +259,13 @@ io.on('connection', (socket) => {
     delete socketToRole[socket.id];
 
     if (roleId && players[roleId]) {
+      roleManager.cancelSwapFor(roleId);
+      players[roleId].socketId = null;
+
       if (gameStarted) {
-        // Keep their data/progress — they (or someone claiming to be them) can reclaim it
         players[roleId].connected = false;
         players[roleId].moving = { left: false, right: false };
       } else {
-        // Still in the lobby — free the role up completely
         const roleIndex = roles.findIndex(r => r.id === roleId);
         if (roleIndex !== -1) roles[roleIndex].takenBy = null;
         delete players[roleId];
@@ -203,7 +277,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// --- Global physics/movement tick (runs continuously while the game is live) ---
+// --- Physics tick ---
 setInterval(() => {
   if (!gameStarted) return;
   let changed = false;

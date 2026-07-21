@@ -1,48 +1,48 @@
-# DRRR Safe House
+# DRRR Safe House v1.1
 
-A disaster-survival icebreaker: you (the host) run the projector screen, everyone else joins
-from their phone and controls their own stickman.
+A disaster-survival icebreaker: the host runs the projector screen, everyone else joins from their phone and controls their own stickman.
 
-## What was fixed / added
-- **The bug:** your saved `index.html` had chat text accidentally pasted into the middle of
-  the `<script>` tag (`for (let i = meteors.length - 1; i >= You are totally right...`).
-  That broke the whole script, so every button silently did nothing. Rebuilt clean — verified
-  with `node --check` on both files.
-- **Intermission/lobby:** host sees everyone who's joined and their chosen role, then hits
-  **▶ Start Game** whenever ready. No one is dropped into gameplay early.
-- **4 disaster events** instead of 1: 🌍 Earthquake (screen shake), 🌪️ Typhoon (wind & debris),
-  🌊 Tsunami (rising water), ☄️ Meteor Strike (falling meteors) — each with its own damage
-  range and visual.
-- **`config.json`** — the 11 roles and 4 events live here so you can rename them, change icons,
-  or tweak damage numbers without touching any code.
-- Health + hunger bars per player, elimination when health hits 0, roles free up automatically
-  if someone disconnects.
+## Version 1.1 Features
 
-## How to run it
-1. Make sure [Node.js](https://nodejs.org) is installed.
-2. In this folder, run:
+- **Automatic disasters** — Earthquake, Typhoon, and Meteor Shower strike randomly every 1–2 minutes (configurable in `config.json`).
+- **Warning overlays** — Large full-screen warning before each disaster on projector and all controllers.
+- **Lookout role** — Lookouts get a 3-second early window to detect disasters; successful detection downgrades the warning to a small notification for everyone.
+- **Health & Food UI** — Progress bars plus block-style meters (`████████░░ 80`) on controller and host sidebar.
+- **Role swapping** — Players can request a swap; the target accepts or declines. Stats, position, and inventory are preserved.
+- **Mobile controls** — SVG arrow icons, no text selection/long-press issues, simultaneous move + jump supported.
+- **Round tracking** — Displays `Round X / 10` on the host screen (architecture ready for win conditions).
+- **Rejoin** — Existing seat-reclaim flow preserved and improved (rejoin errors shown on rejoin screen).
+
+## How to run
+
+1. Install [Node.js](https://nodejs.org).
+2. In this folder:
    ```
    npm install
    npm start
    ```
-3. Open `http://localhost:3000` on your laptop → click **Start as Host (Projector)**. Plug the
-   laptop into the projector.
-4. Everyone else connects their **phone** to the same Wi-Fi, then opens
-   `http://<your-laptop-IP>:3000` (find your IP with `ipconfig`/`ifconfig`) and clicks
-   **Join as Player (Phone)**.
-5. Players enter the 4-letter room code shown on the projector, pick a name/color/role, and
-   land in the waiting room.
-6. Host clicks **▶ Start Game** once everyone's in — controllers unlock on players' phones.
-7. Host taps the 4 event buttons any time to hit the group with a disaster.
+3. Open `http://localhost:3000` on the laptop → **Start as Host (Projector)**.
+4. Players on the same Wi-Fi open `http://<laptop-IP>:3000` → **Join as Player (Phone)**.
+5. Enter the room code, pick name/color/role, wait in lobby.
+6. Host clicks **▶ Start Game** — disasters begin automatically.
 
-## Ideas to extend later
-- Give Carpenters a "repair" button that only works when both tap it within a few seconds.
-- Let Providers/Medics send a one-time heal or food boost to a chosen player.
-- Add a floor-switching control so players can retreat upstairs during the Tsunami.
-- Add a "win" condition (survive N events) and a results screen.
+## Architecture (extensible for v1.2+)
+
+| Module | Purpose |
+|--------|---------|
+| `server.js` | Express + Socket.io entry, game loop, socket handlers |
+| `lib/disasterManager.js` | Auto-scheduling, warnings, damage ticks — add disasters in `config.json` |
+| `lib/roleManager.js` | Role swap requests/responses — foundation for request system |
+| `config.json` | Roles, events, game settings |
+
+**Prepared but not yet implemented:** shelter integrity, furniture, items/inventory UI, quiz system, medic/heal requests, scavenger gathering, engineer/construction flow.
+
+Player objects include `inventory: []` for future items. Server tracks `shelterIntegrity` and `pendingRequests[]` for future systems.
 
 ## Files
-- `server.js` — game server (Express + Socket.io)
-- `public/index.html` — host screen + player controller (one file, role-switches by URL state)
-- `config.json` — roles and disaster events data
+
+- `server.js` — game server
+- `index.html` — host projector + player controller (single page)
+- `config.json` — roles, disasters, settings
+- `lib/` — modular managers
 - `package.json` — dependencies

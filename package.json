@@ -1,6 +1,6 @@
 {
   "name": "drrr-safehouse",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "DRRR Safe House - a disaster-survival icebreaker game with a host projector screen and phone controllers",
   "main": "server.js",
   "scripts": {
