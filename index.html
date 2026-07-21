@@ -124,7 +124,7 @@
 <body>
 
 <div id="setup">
-  <h1 style="font-size: 3em; margin-bottom: 0;">DRRR Survival</h1>
+  <h1 style="font-size: 3em; margin-bottom: 0;">Jake's DRRR Survival</h1>
   <p style="color: #4facfe; margin-bottom: 40px;">The Safe House Icebreaker</p>
   <button class="btn btn-blue" onclick="setHost()">Start as Host (Projector)</button>
   <button class="btn btn-green" onclick="setPlayer()">Join as Player (Phone)</button>
@@ -239,6 +239,18 @@
     <div id="scavengeSpots"></div>
   </div>
 
+  <div id="hidePanel" style="display:none; margin: 8px auto; max-width: 340px;">
+    <button class="btn btn-yellow" id="hideBtn" style="width:100%; font-size:16px; padding:14px;" onclick="doHide()">Hide in Furniture</button>
+  </div>
+
+  <div id="requestPanel" style="margin: 8px auto; max-width: 340px;">
+    <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+      <button class="btn btn-red btn-sm" onclick="doRequestMedic()">Request Medic</button>
+      <button class="btn btn-green btn-sm" onclick="doRequestFood()">Request Food</button>
+      <button class="btn btn-blue btn-sm" onclick="doRequestEngineer()">Alert Engineer</button>
+    </div>
+  </div>
+
   <div class="action-panel" id="actionPanel">
     <h4>Actions</h4>
     <div class="action-grid" id="actionGrid"></div>
@@ -338,6 +350,24 @@
   </div>
 </div>
 
+<div class="quiz-panel" id="medicSelectPanel">
+  <div class="quiz-box">
+    <h3>Choose a Medic</h3>
+    <p style="font-size:13px; color:#aaa;">Select who to request healing from:</p>
+    <div id="medicSelectOptions"></div>
+    <button class="btn btn-gray btn-sm" onclick="document.getElementById('medicSelectPanel').classList.remove('visible')" style="margin-top:10px;">Cancel</button>
+  </div>
+</div>
+
+<div class="quiz-panel" id="scavengerSelectPanel">
+  <div class="quiz-box">
+    <h3>Choose a Scavenger</h3>
+    <p style="font-size:13px; color:#aaa;">Select who to request food from:</p>
+    <div id="scavengerSelectOptions"></div>
+    <button class="btn btn-gray btn-sm" onclick="document.getElementById('scavengerSelectPanel').classList.remove('visible')" style="margin-top:10px;">Cancel</button>
+  </div>
+</div>
+
 <div class="winner-overlay" id="winnerOverlay">
   <div class="winner-text" id="winnerText">GAME OVER</div>
   <p id="winnerReason" style="color:#aaa; font-size:18px;"></p>
@@ -369,6 +399,10 @@ let furnitureData = {};
 let shelterState = { shelterIntegrity: 100, furniture: {} };
 let myInventory = [];
 let activeDisasters = ['earthquake','typhoon','meteor_shower'];
+let eventActive = false;
+let nearbyFurniture = null;
+let pendingMedicTarget = null;
+let pendingFoodTarget = null;
 
 function formatStatBlocks(value, total = 10) {
   const pct = Math.max(0, Math.min(100, value));
@@ -536,6 +570,37 @@ socket.on('foodShared', (data) => { showToast(data.from + ' shared food with ' +
 socket.on('umbrellaBroken', (data) => { if (data.playerId === myRoleId) showToast('Your umbrella broke!'); });
 socket.on('itemReceived', (data) => { if (data.playerId === myRoleId) showToast('Found: ' + data.item.icon + ' ' + data.item.name); });
 
+socket.on('eventActiveUpdate', (data) => { eventActive = data.eventActive; updateHideButton(); updateActionPanel(); });
+socket.on('furnitureRestored', (data) => { showToast(data.message || 'Housekeepers restored ' + data.count + ' furniture!'); });
+socket.on('housekeeperWaiting', (data) => { showToast(data.message); });
+socket.on('quizAnswered', (data) => { showToast(data.isCorrect ? 'Correct!' : 'Wrong answer!'); });
+socket.on('essaySubmitted', () => { showToast('Essay submitted!'); });
+socket.on('voteSubmitted', () => { showToast('Vote cast!'); });
+socket.on('medicSelectShow', (data) => {
+  const container = document.getElementById('medicSelectOptions');
+  container.innerHTML = '';
+  data.medics.forEach(m => {
+    const btn = document.createElement('div');
+    btn.className = 'quiz-opt';
+    btn.innerHTML = m.roleIcon + ' ' + m.name;
+    btn.onclick = () => { socket.emit('requestMedicTarget', m.roleId); document.getElementById('medicSelectPanel').classList.remove('visible'); };
+    container.appendChild(btn);
+  });
+  document.getElementById('medicSelectPanel').classList.add('visible');
+});
+socket.on('scavengerSelectShow', (data) => {
+  const container = document.getElementById('scavengerSelectOptions');
+  container.innerHTML = '';
+  data.scavengers.forEach(s => {
+    const btn = document.createElement('div');
+    btn.className = 'quiz-opt';
+    btn.innerHTML = s.roleIcon + ' ' + s.name;
+    btn.onclick = () => { socket.emit('requestFoodTarget', s.roleId); document.getElementById('scavengerSelectPanel').classList.remove('visible'); };
+    container.appendChild(btn);
+  });
+  document.getElementById('scavengerSelectPanel').classList.add('visible');
+});
+
 socket.on('hostData', (data) => {
   document.getElementById('hostRoomCode').innerText = data.roomCode;
   gameStarted = data.gameStarted;
@@ -560,6 +625,7 @@ socket.on('updatePlayers', (data) => {
     updateInventoryUI();
     updateActionPanel();
     updateScavengePanel();
+    updateHideButton();
     document.getElementById('controllerFloor').innerText = 'Floor: ' + (data[myRoleId].floor || 1);
   }
 });
@@ -613,7 +679,11 @@ function updateActionPanel() {
   if (!grid || !myRoleId || !playersData[myRoleId]) return;
   const me = playersData[myRoleId];
   grid.innerHTML = '';
+
+  const canAct = (me.roleName === 'Lookout' || me.roleName === 'Scavenger') || !eventActive;
+
   if (me.roleName === 'Medic') {
+    if (!canAct) { grid.innerHTML = '<span style="color:#aaa; font-size:12px;">Medic powers available after event</span>'; return; }
     for (const id in playersData) {
       const p = playersData[id];
       if (id !== myRoleId && p.isAlive && p.connected) {
@@ -625,35 +695,30 @@ function updateActionPanel() {
       }
     }
   } else if (me.roleName === 'Engineer') {
+    if (!canAct) { grid.innerHTML = '<span style="color:#aaa; font-size:12px;">Engineer powers available after event</span>'; return; }
     const btn = document.createElement('button');
     btn.className = 'action-btn';
     btn.innerHTML = 'Initialize Construction';
     btn.onclick = () => socket.emit('initializeConstruction');
     grid.appendChild(btn);
   } else if (me.roleName === 'Constructor') {
+    if (!canAct) { grid.innerHTML = '<span style="color:#aaa; font-size:12px;">Constructor powers available after event</span>'; return; }
     const btn = document.createElement('button');
     btn.className = 'action-btn';
     btn.innerHTML = 'Begin Construction';
     btn.onclick = () => socket.emit('startConstruction');
     grid.appendChild(btn);
-  } else if (me.roleName === 'Caretaker') {
-    const btn1 = document.createElement('button');
-    btn1.className = 'action-btn';
-    btn1.innerHTML = 'Clean Rubble';
-    btn1.onclick = () => socket.emit('caretakerRepair', null);
-    grid.appendChild(btn1);
-    for (const fid in furnitureData) {
-      const f = furnitureData[fid];
-      if (f.damaged && !f.destroyed) {
-        const btn = document.createElement('button');
-        btn.className = 'action-btn';
-        btn.innerHTML = 'Fix ' + f.icon + ' ' + f.name;
-        btn.onclick = () => socket.emit('caretakerRepair', fid);
-        grid.appendChild(btn);
-      }
-    }
+  } else if (me.roleName === 'Housekeeper') {
+    if (!canAct) { grid.innerHTML = '<span style="color:#aaa; font-size:12px;">Housekeeper powers available after event</span>'; return; }
+    const btn = document.createElement('button');
+    btn.className = 'action-btn';
+    btn.style.gridColumn = '1 / -1';
+    btn.innerHTML = 'Restore Furniture (Both must click)';
+    btn.onclick = () => socket.emit('housekeeperRestore');
+    grid.appendChild(btn);
   }
-  if (grid.children.length === 0) grid.innerHTML = '<span style="color:#888; font-size:12px;">No actions available</span>';
+
+  if (grid.children.length === 0 && !grid.innerHTML) grid.innerHTML = '<span style="color:#888; font-size:12px;">No actions available</span>';
 }
 
 function updateScavengePanel() {
@@ -664,7 +729,7 @@ function updateScavengePanel() {
   if (me.roleName === 'Scavenger') {
     panel.classList.add('visible');
     spots.innerHTML = '';
-    const spotsList = [{ id: 'shrub1', name: 'Shrub (Left)', icon: '🌿' }, { id: 'shrub2', name: 'Shrub (Right)', icon: '🌿' }];
+    const spotsList = [{ id: 'shrub1', name: 'Shrub (Left)', icon: '🌿' }, { id: 'shrub2', name: 'Shrub (Right)', icon: '🌿' }, { id: 'shrub3', name: 'Shrub (Far Left)', icon: '🌿' }];
     spotsList.forEach(s => {
       const btn = document.createElement('button');
       btn.className = 'action-btn';
@@ -930,9 +995,48 @@ socket.on('essayCancelled', (data) => {
   showToast('Essay cancelled: ' + data.reason);
 });
 function hostThrowEssay() { socket.emit('throwEssay'); }
-function hostTriggerDisaster() {
-  const idx = Math.floor(Math.random() * activeDisasters.length);
-  socket.emit('throwQuiz');
+function hostTriggerDisaster() { socket.emit('throwQuiz'); }
+
+function doHide() {
+  if (nearbyFurniture) {
+    socket.emit('hideInFurniture', nearbyFurniture.id);
+    nearbyFurniture = null;
+    updateHideButton();
+  }
+}
+
+function doRequestMedic() {
+  if (!myRoleId || !playersData[myRoleId]) return;
+  if (playersData[myRoleId].health >= 50) return showToast('You can only request a Medic below 50 health!');
+  socket.emit('requestMedic');
+}
+
+function doRequestFood() { socket.emit('requestFood'); }
+function doRequestEngineer() { socket.emit('requestEngineer'); }
+
+function updateHideButton() {
+  const panel = document.getElementById('hidePanel');
+  if (!panel || !myRoleId || !playersData[myRoleId]) return;
+  const me = playersData[myRoleId];
+  if (!me.isAlive || me.hidingIn) { panel.style.display = 'none'; return; }
+
+  nearbyFurniture = null;
+  for (const fid in furnitureData) {
+    const f = furnitureData[fid];
+    if (f.destroyed || f.floor !== me.floor) continue;
+    const dist = Math.abs(me.x - (f.x + f.w / 2));
+    if (dist < f.w * 1.2 && f.currentDurability > 1) {
+      nearbyFurniture = { id: fid, furniture: f };
+      break;
+    }
+  }
+
+  if (nearbyFurniture) {
+    panel.style.display = 'block';
+    document.getElementById('hideBtn').innerText = 'Hide in ' + nearbyFurniture.furniture.icon + ' ' + nearbyFurniture.furniture.name + '?';
+  } else {
+    panel.style.display = 'none';
+  }
 }
 
 function bindControlButton(id, direction) {

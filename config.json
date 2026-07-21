@@ -9,7 +9,8 @@
     { "id": "con2", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter and furniture. Cannot begin until Engineer activates construction. Takes ~20 seconds." },
     { "id": "lok1", "name": "Lookout", "icon": "🔭", "description": "Detects incoming disasters early, giving the group extra warning time." },
     { "id": "lok2", "name": "Lookout", "icon": "🔭", "description": "Detects incoming disasters early, giving the group extra warning time." },
-    { "id": "ctk1", "name": "Caretaker", "icon": "🧹", "description": "Maintains the shelter — cleans rubble, repairs furniture, organizes hiding spots, restores shelter after disasters." }
+    { "id": "ctk1", "name": "Housekeeper", "icon": "🧹", "description": "Fixes the furniture for everyone to hide into. Restores furniture durability after events." },
+    { "id": "ctk2", "name": "Housekeeper", "icon": "🧹", "description": "Fixes the furniture for everyone to hide into. Restores furniture durability after events." }
   ],
   "items": [
     { "id": "food", "name": "Food", "icon": "🍞", "description": "Restores 25 hunger.", "hungerRestore": 25 },
