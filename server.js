@@ -5,14 +5,21 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 // Load roles + events from config.json so they're easy to tweak
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const events = config.events;
 
+const GRAVITY = 1.3;
+const JUMP_SPEED = 15;
+const MOVE_SPEED = 6;
+const TICK_MS = 50; // 20fps physics/broadcast tick
+
 // --- Game State ---
+// players is keyed by roleId (STABLE across reconnects) instead of socket.id
 let players = {};
+let socketToRole = {}; // socket.id -> roleId, only for currently-connected sockets
 let roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 let gameStarted = false;
 let activeEvent = null;
@@ -20,10 +27,29 @@ let roles = config.roles.map(r => ({ ...r, takenBy: null }));
 
 function resetGame() {
   players = {};
+  socketToRole = {};
   roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
   gameStarted = false;
   activeEvent = null;
   roles = config.roles.map(r => ({ ...r, takenBy: null }));
+}
+
+function makeFreshPlayer(roleDef, data) {
+  return {
+    name: (data.name || '').trim().slice(0, 12),
+    roleName: roleDef.name,
+    roleIcon: roleDef.icon,
+    roleId: roleDef.id,
+    color: data.color || '#43e97b',
+    x: Math.floor(Math.random() * 550) + 120,
+    offsetY: 0,
+    vy: 0,
+    moving: { left: false, right: false },
+    health: 100,
+    hunger: 100,
+    isAlive: true,
+    connected: true
+  };
 }
 
 io.on('connection', (socket) => {
@@ -49,18 +75,38 @@ io.on('connection', (socket) => {
 
   // --- PLAYER: Step 1, verify room code ---
   socket.on('verifyRoom', (code) => {
-    if ((code || '').toUpperCase() === roomCode) {
-      if (gameStarted) {
-        socket.emit('joinError', 'The game has already started — ask the host to reset!');
-      } else {
-        socket.emit('roomVerified', roles);
-      }
-    } else {
-      socket.emit('joinError', 'Invalid room code — check the projector screen!');
+    if ((code || '').toUpperCase() !== roomCode) {
+      return socket.emit('joinError', 'Invalid room code — check the projector screen!');
     }
+
+    if (!gameStarted) {
+      return socket.emit('roomVerified', { rejoin: false, roles });
+    }
+
+    // Game already running — only allow reclaiming a seat that got disconnected
+    const options = Object.values(players)
+      .filter(p => !p.connected)
+      .map(p => ({ roleId: p.roleId, name: p.name, roleIcon: p.roleIcon, roleName: p.roleName }));
+
+    if (options.length === 0) {
+      return socket.emit('joinError', 'The game already started and every seat is taken!');
+    }
+    socket.emit('roomVerified', { rejoin: true, options });
   });
 
-  // --- PLAYER: Step 2, finalize join ---
+  // --- PLAYER: reclaim a seat after being disconnected mid-game ---
+  socket.on('reclaimSeat', (data) => {
+    const p = players[data.roleId];
+    if (!p || p.connected) {
+      return socket.emit('joinError', 'That seat is no longer available.');
+    }
+    p.connected = true;
+    socketToRole[socket.id] = data.roleId;
+    socket.emit('rejoinSuccess', p);
+    io.emit('updatePlayers', players);
+  });
+
+  // --- PLAYER: Step 2, finalize a fresh join (lobby only) ---
   socket.on('joinGame', (data) => {
     if (gameStarted) {
       return socket.emit('joinError', 'The game has already started!');
@@ -74,35 +120,32 @@ io.on('connection', (socket) => {
     }
 
     roles[roleIndex].takenBy = name;
-    players[socket.id] = {
-      id: socket.id,
-      name,
-      roleName: roles[roleIndex].name,
-      roleIcon: roles[roleIndex].icon,
-      roleId: data.roleId,
-      color: data.color || '#43e97b',
-      x: Math.floor(Math.random() * 550) + 120,
-      jumpUntil: 0,
-      health: 100,
-      hunger: 100,
-      isAlive: true
-    };
+    const player = makeFreshPlayer(roles[roleIndex], data);
+    players[data.roleId] = player;
+    socketToRole[socket.id] = data.roleId;
 
     io.emit('updateRoles', roles);
     io.emit('updatePlayers', players);
-    socket.emit('joinSuccess', players[socket.id]);
+    socket.emit('joinSuccess', player);
   });
 
   // --- PLAYER: movement (only works once game has started) ---
-  socket.on('move', (direction) => {
-    const p = players[socket.id];
+  socket.on('moveStart', (direction) => {
+    const p = players[socketToRole[socket.id]];
     if (!gameStarted || !p || !p.isAlive) return;
+    if (direction === 'left' || direction === 'right') p.moving[direction] = true;
+  });
 
-    if (direction === 'left') p.x = Math.max(60, p.x - 25);
-    if (direction === 'right') p.x = Math.min(740, p.x + 25);
-    if (direction === 'jump') p.jumpUntil = Date.now() + 400; // visual-only hop
+  socket.on('moveStop', (direction) => {
+    const p = players[socketToRole[socket.id]];
+    if (!p) return;
+    if (direction === 'left' || direction === 'right') p.moving[direction] = false;
+  });
 
-    io.emit('updatePlayers', players);
+  socket.on('jump', () => {
+    const p = players[socketToRole[socket.id]];
+    if (!gameStarted || !p || !p.isAlive) return;
+    if (p.offsetY === 0) p.vy = JUMP_SPEED; // only jump while grounded
   });
 
   // --- HOST: trigger one of the 4 disaster events ---
@@ -120,8 +163,8 @@ io.on('connection', (socket) => {
 
     const interval = setInterval(() => {
       tick++;
-      for (const id in players) {
-        const p = players[id];
+      for (const rid in players) {
+        const p = players[rid];
         if (!p.isAlive) continue;
         const dmg = Math.floor(Math.random() * (ev.damage[1] - ev.damage[0] + 1)) + ev.damage[0];
         p.health = Math.max(0, p.health - Math.round(dmg / TICKS));
@@ -139,16 +182,47 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    if (players[socket.id]) {
-      const roleIndex = roles.findIndex(r => r.id === players[socket.id].roleId);
-      if (roleIndex !== -1) roles[roleIndex].takenBy = null;
-      delete players[socket.id];
-      io.emit('updateRoles', roles);
+    const roleId = socketToRole[socket.id];
+    delete socketToRole[socket.id];
+
+    if (roleId && players[roleId]) {
+      if (gameStarted) {
+        // Keep their data/progress — they (or someone claiming to be them) can reclaim it
+        players[roleId].connected = false;
+        players[roleId].moving = { left: false, right: false };
+      } else {
+        // Still in the lobby — free the role up completely
+        const roleIndex = roles.findIndex(r => r.id === roleId);
+        if (roleIndex !== -1) roles[roleIndex].takenBy = null;
+        delete players[roleId];
+        io.emit('updateRoles', roles);
+      }
       io.emit('updatePlayers', players);
     }
     console.log('Disconnected:', socket.id);
   });
 });
+
+// --- Global physics/movement tick (runs continuously while the game is live) ---
+setInterval(() => {
+  if (!gameStarted) return;
+  let changed = false;
+  for (const rid in players) {
+    const p = players[rid];
+    if (!p.connected || !p.isAlive) continue;
+
+    if (p.moving.left) { p.x = Math.max(60, p.x - MOVE_SPEED); changed = true; }
+    if (p.moving.right) { p.x = Math.min(740, p.x + MOVE_SPEED); changed = true; }
+
+    if (p.vy !== 0 || p.offsetY > 0) {
+      p.offsetY += p.vy;
+      p.vy -= GRAVITY;
+      if (p.offsetY <= 0) { p.offsetY = 0; p.vy = 0; }
+      changed = true;
+    }
+  }
+  if (changed) io.emit('updatePlayers', players);
+}, TICK_MS);
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {

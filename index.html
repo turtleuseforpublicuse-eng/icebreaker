@@ -56,6 +56,24 @@
   .swatch { width: 18px; height: 18px; border-radius: 50%; display: inline-block; }
   .pulse { animation: pulse 1.5s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Circular color picker */
+  .color-picker-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 10px 0 20px; }
+  #colorPreview { width: 46px; height: 46px; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
+  #colorWheelCanvas { border-radius: 50%; cursor: crosshair; touch-action: none; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+
+  /* Role description panel */
+  #roleDescription { max-width: 480px; margin: 10px auto 0; min-height: 40px; color: #cfe8ff; font-size: 14px; background: #0f3460; border-radius: 8px; padding: 10px 16px; }
+
+  /* Rejoin (reclaim seat) screen */
+  .rejoin-option { background: #0f3460; padding: 14px 18px; border-radius: 8px; margin: 8px auto; max-width: 400px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 2px solid transparent; }
+  .rejoin-option:hover { border-color: #4facfe; }
+
+  /* Controller stat bars */
+  .controller-bars { max-width: 320px; margin: 10px auto 20px; text-align: left; }
+  .controller-bars .stat-label { font-size: 13px; color: #aaa; display: flex; justify-content: space-between; margin-top: 8px; }
+  .controller-bars .bar-track { height: 14px; background: #051022; border-radius: 7px; overflow: hidden; }
+  .controller-bars .bar-fill { height: 100%; transition: width 0.3s; }
 </style>
 </head>
 <body>
@@ -118,13 +136,25 @@
   <input type="text" id="playerName" placeholder="Your Name" maxlength="12"><br>
 
   <p>Pick your Stickman Color:</p>
-  <input type="color" id="playerColor" value="#43e97b"><br>
+  <div class="color-picker-wrap">
+    <div id="colorPreview" style="background:#43e97b;"></div>
+    <canvas id="colorWheelCanvas" width="160" height="160"></canvas>
+  </div>
 
   <p>Select your Role:</p>
   <div class="roles-grid" id="rolesContainer"></div>
+  <p id="roleDescription">Tap or hover a role to see what it does.</p>
 
   <p id="step2Error" style="color: #ffb199; height: 20px;"></p>
   <button class="btn btn-green" style="width: 100%; max-width: 300px;" onclick="attemptJoin()">JOIN GAME</button>
+</div>
+
+<!-- PLAYER: Reclaim a seat after being disconnected mid-game -->
+<div id="lobbyRejoin" style="display:none; padding: 20px;">
+  <h2>Welcome back!</h2>
+  <p style="color:#aaa;">The game's already running. Are you one of these survivors?</p>
+  <div id="rejoinOptions"></div>
+  <p id="rejoinError" style="color: #ffb199; height: 20px;"></p>
 </div>
 
 <!-- PLAYER: Waiting for host to start -->
@@ -138,11 +168,17 @@
 <div id="clientController">
   <h2 id="controllerName">Survivor</h2>
   <h3 id="controllerRole" style="color: #4facfe; margin-top: -10px;"></h3>
-  <p id="controllerStats" style="color: #aaa;"></p>
+  <div class="controller-bars">
+    <div class="stat-label"><span>❤️ Health</span><span id="controllerHealthNum">100</span></div>
+    <div class="bar-track"><div class="bar-fill" id="controllerHealthBar" style="width:100%; background:#ff0844;"></div></div>
+    <div class="stat-label"><span>🍞 Hunger</span><span id="controllerHungerNum">100</span></div>
+    <div class="bar-track"><div class="bar-fill" id="controllerHungerBar" style="width:100%; background:#43e97b;"></div></div>
+  </div>
+  <p id="controllerDead" style="color:#ffb199; font-weight:bold; display:none;">💀 Eliminated</p>
   <div class="controls">
-    <button class="ctrl-btn" onclick="move('left')">⬅️</button>
-    <button class="ctrl-btn" onclick="move('jump')">⬆️</button>
-    <button class="ctrl-btn" onclick="move('right')">➡️</button>
+    <button class="ctrl-btn" id="btnLeft">⬅️</button>
+    <button class="ctrl-btn" id="btnJump">⬆️</button>
+    <button class="ctrl-btn" id="btnRight">➡️</button>
   </div>
 </div>
 
@@ -152,7 +188,6 @@
   let playersData = {};
   let selectedRoleId = null;
   let storedJoinCode = "";
-  let myId = null;
 
   let gameStarted = false;
   let activeEvent = null;   // { id, name, icon, duration, hint }
@@ -160,12 +195,92 @@
   let particles = [];
   let waterLevel = 0;       // 0..1 for tsunami
   let shakeAmount = 0;      // for earthquake
+  let myRoleId = null;
+  let selectedColor = '#43e97b';
+
+  // --- CIRCULAR COLOR WHEEL ---
+  function hslToRgb(h, s, l) {
+    let r, g, b;
+    if (s === 0) { r = g = b = l; }
+    else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    return [Math.round(r*255), Math.round(g*255), Math.round(b*255)];
+  }
+  function rgbToHex(r, g, b) {
+    return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+  }
+
+  function drawColorWheel() {
+    const canvas = document.getElementById('colorWheelCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const cx = w/2, cy = h/2, radius = w/2;
+    const img = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = x - cx, dy = y - cy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const idx = (y * w + x) * 4;
+        if (dist <= radius) {
+          let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          if (angle < 0) angle += 360;
+          const sat = Math.min(1, dist / radius);
+          const [r,g,b] = hslToRgb(angle/360, sat, 0.5);
+          img.data[idx] = r; img.data[idx+1] = g; img.data[idx+2] = b; img.data[idx+3] = 255;
+        } else {
+          img.data[idx+3] = 0;
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  function pickColorAt(clientX, clientY) {
+    const canvas = document.getElementById('colorWheelCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const cx = canvas.width/2, cy = canvas.height/2, radius = canvas.width/2;
+    const dx = x - cx, dy = y - cy;
+    const dist = Math.min(radius, Math.sqrt(dx*dx + dy*dy));
+    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (angle < 0) angle += 360;
+    const sat = dist / radius;
+    const [r,g,b] = hslToRgb(angle/360, sat, 0.5);
+    selectedColor = rgbToHex(r,g,b);
+    document.getElementById('colorPreview').style.background = selectedColor;
+  }
+
+  function setupColorWheel() {
+    const canvas = document.getElementById('colorWheelCanvas');
+    if (!canvas || canvas.dataset.ready) return;
+    canvas.dataset.ready = '1';
+    drawColorWheel();
+    let dragging = false;
+    canvas.addEventListener('pointerdown', (e) => { dragging = true; pickColorAt(e.clientX, e.clientY); });
+    window.addEventListener('pointermove', (e) => { if (dragging) pickColorAt(e.clientX, e.clientY); });
+    window.addEventListener('pointerup', () => { dragging = false; });
+  }
 
   const HOUSE = { groundY: 450, roofY: 100, leftX: 50, rightX: 750, floor2Y: 280 };
 
   // --- SCREEN SWITCHING ---
   function showOnly(id) {
-    ['setup','hostView','lobbyStep1','lobbyStep2','clientWaiting','clientController'].forEach(s => {
+    ['setup','hostView','lobbyStep1','lobbyStep2','lobbyRejoin','clientWaiting','clientController'].forEach(s => {
       document.getElementById(s).style.display = (s === id) ? 'block' : 'none';
     });
   }
@@ -178,6 +293,7 @@
 
   function setPlayer() {
     showOnly('lobbyStep1');
+    setupColorWheel();
   }
 
   // --- HOST LOGIC ---
@@ -282,9 +398,33 @@
     socket.emit('verifyRoom', code);
   }
 
-  socket.on('roomVerified', (roles) => {
-    showOnly('lobbyStep2');
-    renderRoles(roles);
+  socket.on('roomVerified', (data) => {
+    if (data.rejoin) {
+      showOnly('lobbyRejoin');
+      renderRejoinOptions(data.options);
+    } else {
+      showOnly('lobbyStep2');
+      renderRoles(data.roles);
+    }
+  });
+
+  function renderRejoinOptions(options) {
+    const container = document.getElementById('rejoinOptions');
+    container.innerHTML = '';
+    options.forEach(opt => {
+      const div = document.createElement('div');
+      div.className = 'rejoin-option';
+      div.innerHTML = `<span style="font-size:24px;">${opt.roleIcon}</span><div><strong>${opt.name}</strong><br><span style="font-size:12px;color:#aaa;">${opt.roleName}</span></div>`;
+      div.onclick = () => socket.emit('reclaimSeat', { roleId: opt.roleId });
+      container.appendChild(div);
+    });
+  }
+
+  socket.on('rejoinSuccess', (me) => {
+    myRoleId = me.roleId;
+    document.getElementById('controllerName').innerText = me.name;
+    document.getElementById('controllerRole').innerText = `${me.roleIcon} ${me.roleName}`;
+    showOnly('clientController');
   });
 
   socket.on('joinError', (msg) => {
@@ -313,10 +453,14 @@
       } else {
         div.innerHTML = content;
         if (selectedRoleId === role.id) div.classList.add('selected');
+        div.onmouseenter = () => {
+          document.getElementById('roleDescription').innerText = `${role.icon} ${role.name}: ${role.description || ''}`;
+        };
         div.onclick = () => {
           selectedRoleId = role.id;
           document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
           div.classList.add('selected');
+          document.getElementById('roleDescription').innerText = `${role.icon} ${role.name}: ${role.description || ''}`;
         };
       }
       container.appendChild(div);
@@ -325,15 +469,14 @@
 
   function attemptJoin() {
     const name = document.getElementById('playerName').value.trim();
-    const color = document.getElementById('playerColor').value;
     const errorMsg = document.getElementById('step2Error');
     if (!name) return errorMsg.innerText = "Please enter your name!";
     if (!selectedRoleId) return errorMsg.innerText = "Please select an available role!";
-    socket.emit('joinGame', { code: storedJoinCode, name, color, roleId: selectedRoleId });
+    socket.emit('joinGame', { code: storedJoinCode, name, color: selectedColor, roleId: selectedRoleId });
   }
 
   socket.on('joinSuccess', (me) => {
-    myId = me.id;
+    myRoleId = me.roleId;
     document.getElementById('waitingName').innerText = `${me.name} — ${me.roleIcon} ${me.roleName}`;
     document.getElementById('controllerName').innerText = me.name;
     document.getElementById('controllerRole').innerText = `${me.roleIcon} ${me.roleName}`;
@@ -341,14 +484,31 @@
   });
 
   socket.on('updatePlayers', (data) => {
-    if (myId && data[myId]) {
-      const me = data[myId];
-      const stats = document.getElementById('controllerStats');
-      if (stats) stats.innerText = `❤️ ${me.health}   🍞 ${me.hunger}` + (me.isAlive ? '' : '   💀 Eliminated');
+    if (myRoleId && data[myRoleId]) {
+      const me = data[myRoleId];
+      const hpBar = document.getElementById('controllerHealthBar');
+      const hgBar = document.getElementById('controllerHungerBar');
+      if (hpBar) {
+        hpBar.style.width = me.health + '%';
+        document.getElementById('controllerHealthNum').innerText = me.health;
+        hgBar.style.width = me.hunger + '%';
+        document.getElementById('controllerHungerNum').innerText = me.hunger;
+        document.getElementById('controllerDead').style.display = me.isAlive ? 'none' : 'block';
+      }
     }
   });
 
-  function move(direction) { socket.emit('move', direction); }
+  // --- Hold-to-move controls (pointer events cover mouse + touch, no double-fire) ---
+  function bindHoldButton(id, onDown, onUp) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); onDown(); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => btn.addEventListener(evt, onUp));
+  }
+  bindHoldButton('btnLeft', () => socket.emit('moveStart', 'left'), () => socket.emit('moveStop', 'left'));
+  bindHoldButton('btnRight', () => socket.emit('moveStart', 'right'), () => socket.emit('moveStop', 'right'));
+  const jumpBtn = document.getElementById('btnJump');
+  if (jumpBtn) jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); socket.emit('jump'); });
 
   // --- HOST CANVAS RENDER LOOP ---
   const canvas = document.getElementById('gameCanvas');
@@ -384,8 +544,7 @@
   }
 
   function drawStickman(p) {
-    const legLift = (Date.now() < p.jumpUntil) ? 30 : 0;
-    const feetY = HOUSE.groundY - legLift;
+    const feetY = HOUSE.groundY - (p.offsetY || 0);
     const headY = feetY - 55;
 
     ctx.strokeStyle = p.color;
