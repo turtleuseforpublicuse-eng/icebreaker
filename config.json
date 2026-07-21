@@ -1,0 +1,21 @@
+{
+  "roles": [
+    { "id": "c1", "name": "Carpenter", "icon": "🔨", "description": "Repairs house damage. Both Carpenters must work together to fully fix the house." },
+    { "id": "c2", "name": "Carpenter", "icon": "🔨", "description": "Repairs house damage. Both Carpenters must work together to fully fix the house." },
+    { "id": "m1", "name": "Medic", "icon": "🩺", "description": "Heals injured survivors and slows health loss during events." },
+    { "id": "m2", "name": "Medic", "icon": "🩺", "description": "Heals injured survivors and slows health loss during events." },
+    { "id": "p1", "name": "Provider", "icon": "🍲", "description": "Supplies food to fight off hunger for the group." },
+    { "id": "p2", "name": "Provider", "icon": "🍲", "description": "Supplies food to fight off hunger for the group." },
+    { "id": "e1", "name": "Engineer", "icon": "⚙️", "description": "Reinforces the house structure, reducing damage taken during disasters." },
+    { "id": "s1", "name": "Scavenger", "icon": "🎒", "description": "Finds extra supplies while events are happening." },
+    { "id": "s2", "name": "Scavenger", "icon": "🎒", "description": "Finds extra supplies while events are happening." },
+    { "id": "l1", "name": "Lookout", "icon": "🔭", "description": "Spots incoming disasters early and gives the group warning time." },
+    { "id": "l2", "name": "Lookout", "icon": "🔭", "description": "Spots incoming disasters early and gives the group warning time." }
+  ],
+  "events": [
+    { "id": "earthquake", "name": "Earthquake", "icon": "🌍", "duration": 6000, "damage": [10, 25], "hint": "The ground is shaking! Everyone brace and hang on!" },
+    { "id": "typhoon", "name": "Typhoon", "icon": "🌪️", "duration": 7000, "damage": [8, 18], "hint": "Fierce winds and flying debris are battering the house!" },
+    { "id": "tsunami", "name": "Tsunami", "icon": "🌊", "duration": 8000, "damage": [15, 30], "hint": "Water is rising fast — get to higher ground!" },
+    { "id": "meteor", "name": "Meteor Strike", "icon": "☄️", "duration": 6000, "damage": [10, 30], "hint": "Meteors are falling from the sky — take cover!" }
+  ]
+}
