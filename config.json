@@ -1,27 +1,95 @@
 {
   "roles": [
-    { "id": "c1", "name": "Carpenter", "icon": "🔨", "description": "Repairs house damage. Both Carpenters must work together to fully fix the house." },
-    { "id": "c2", "name": "Carpenter", "icon": "🔨", "description": "Repairs house damage. Both Carpenters must work together to fully fix the house." },
-    { "id": "m1", "name": "Medic", "icon": "🩺", "description": "Heals injured survivors and slows health loss during events." },
-    { "id": "m2", "name": "Medic", "icon": "🩺", "description": "Heals injured survivors and slows health loss during events." },
-    { "id": "p1", "name": "Provider", "icon": "🍲", "description": "Supplies food to fight off hunger for the group." },
-    { "id": "p2", "name": "Provider", "icon": "🍲", "description": "Supplies food to fight off hunger for the group." },
-    { "id": "e1", "name": "Engineer", "icon": "⚙️", "description": "Reinforces the house structure, reducing damage taken during disasters." },
-    { "id": "s1", "name": "Scavenger", "icon": "🎒", "description": "Finds extra supplies while events are happening." },
-    { "id": "s2", "name": "Scavenger", "icon": "🎒", "description": "Finds extra supplies while events are happening." },
-    { "id": "l1", "name": "Lookout", "icon": "🔭", "description": "Spots incoming disasters early and gives the group warning time." },
-    { "id": "l2", "name": "Lookout", "icon": "🔭", "description": "Spots incoming disasters early and gives the group warning time." }
+    { "id": "med1", "name": "Medic", "icon": "🩺", "description": "Heals injured survivors. Cannot heal themselves — only another Medic can heal a Medic." },
+    { "id": "med2", "name": "Medic", "icon": "🩺", "description": "Heals injured survivors. Cannot heal themselves — only another Medic can heal a Medic." },
+    { "id": "scv1", "name": "Scavenger", "icon": "🎒", "description": "Gathers food and resources from shrubs between disasters. Can share food with others." },
+    { "id": "scv2", "name": "Scavenger", "icon": "🎒", "description": "Gathers food and resources from shrubs between disasters. Can share food with others." },
+    { "id": "eng1", "name": "Engineer", "icon": "⚙️", "description": "Must initialize construction. Without the Engineer, Constructors cannot begin repairs." },
+    { "id": "con1", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter and furniture. Cannot begin until Engineer activates construction. Takes ~20 seconds." },
+    { "id": "con2", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter and furniture. Cannot begin until Engineer activates construction. Takes ~20 seconds." },
+    { "id": "lok1", "name": "Lookout", "icon": "🔭", "description": "Detects incoming disasters early, giving the group extra warning time." },
+    { "id": "lok2", "name": "Lookout", "icon": "🔭", "description": "Detects incoming disasters early, giving the group extra warning time." },
+    { "id": "ctk1", "name": "Caretaker", "icon": "🧹", "description": "Maintains the shelter — cleans rubble, repairs furniture, organizes hiding spots, restores shelter after disasters." }
+  ],
+  "items": [
+    { "id": "food", "name": "Food", "icon": "🍞", "description": "Restores 25 hunger.", "hungerRestore": 25 },
+    { "id": "water", "name": "Water", "icon": "💧", "description": "Restores 15 hunger and 10 health.", "hungerRestore": 15, "healthRestore": 10 },
+    { "id": "umbrella", "name": "Umbrella", "icon": "☂️", "description": "Blocks meteor damage. Durability = 2 hits.", "blocksMeteor": true, "durability": 2 },
+    { "id": "repair_kit", "name": "Repair Kit", "icon": "🧰", "description": "Repairs 20 shelter integrity or one piece of furniture.", "shelterRepair": 20 },
+    { "id": "first_aid", "name": "First Aid Kit", "icon": "🩹", "description": "Restores 30 health.", "healthRestore": 30 },
+    { "id": "battery", "name": "Battery", "icon": "🔋", "description": "Power source for future electronics.", "special": "battery" },
+    { "id": "supplies", "name": "Random Supplies", "icon": "📦", "description": "Miscellaneous useful materials.", "special": "supplies" }
+  ],
+  "furniture": [
+    { "id": "table1", "name": "Table", "icon": "🪑", "floor": 1, "x": 120, "y": 400, "w": 80, "h": 50, "durability": 3, "hidingBonus": 0.1, "description": "Basic table. Provides slight shelter." },
+    { "id": "table2", "name": "Table", "icon": "🪑", "floor": 1, "x": 600, "y": 400, "w": 80, "h": 50, "durability": 3, "hidingBonus": 0.1, "description": "Basic table. Provides slight shelter." },
+    { "id": "bed1", "name": "Bed", "icon": "🛏️", "floor": 1, "x": 350, "y": 410, "w": 100, "h": 40, "durability": 2, "hidingBonus": 0.15, "description": "Rest area. Moderate shelter." },
+    { "id": "sofa1", "name": "Sofa", "icon": "🛋️", "floor": 1, "x": 520, "y": 405, "w": 90, "h": 45, "durability": 2, "hidingBonus": 0.15, "description": "Comfy sofa. Moderate shelter." },
+    { "id": "closet1", "name": "Closet", "icon": "🗄️", "floor": 1, "x": 80, "y": 380, "w": 50, "h": 70, "durability": 2, "hidingBonus": 0.25, "description": "Tight but protective hiding spot." },
+    { "id": "cabinet1", "name": "Cabinet", "icon": "🗄️", "floor": 1, "x": 680, "y": 385, "w": 55, "h": 65, "durability": 2, "hidingBonus": 0.2, "description": "Storage cabinet. Decent shelter." },
+    { "id": "bookshelf1", "name": "Bookshelf", "icon": "📚", "floor": 2, "x": 120, "y": 230, "w": 60, "h": 50, "durability": 2, "hidingBonus": 0.15, "description": "Bookshelf on the second floor." },
+    { "id": "pantry1", "name": "Pantry", "icon": "🥫", "floor": 1, "x": 250, "y": 390, "w": 60, "h": 60, "durability": 2, "hidingBonus": 0.2, "description": "Food storage. Good shelter." },
+    { "id": "firstaid1", "name": "First Aid Cabinet", "icon": "🏥", "floor": 2, "x": 600, "y": 225, "w": 55, "h": 55, "durability": 3, "hidingBonus": 0.15, "description": "Medical supplies cabinet." },
+    { "id": "umbrella_stand1", "name": "Umbrella Stand", "icon": "☂️", "floor": 1, "x": 170, "y": 415, "w": 30, "h": 35, "durability": 1, "hidingBonus": 0.05, "description": "Holds umbrellas. Minimal shelter." },
+    { "id": "bed2", "name": "Bed", "icon": "🛏️", "floor": 2, "x": 350, "y": 235, "w": 100, "h": 40, "durability": 2, "hidingBonus": 0.2, "description": "Upper floor bed. Good shelter." },
+    { "id": "cabinet2", "name": "Cabinet", "icon": "🗄️", "floor": 2, "x": 480, "y": 230, "w": 55, "h": 50, "durability": 2, "hidingBonus": 0.2, "description": "Upper floor cabinet." }
+  ],
+  "scavengeSpots": [
+    { "id": "shrub1", "name": "Shrub", "icon": "🌿", "x": 30, "y": 430, "floor": 0 },
+    { "id": "shrub2", "name": "Shrub", "icon": "🌿", "x": 760, "y": 430, "floor": 0 },
+    { "id": "shrub3", "name": "Shrub", "icon": "🌿", "x": 10, "y": 430, "floor": 0 }
   ],
   "events": [
-    { "id": "earthquake", "name": "Earthquake", "icon": "🌍", "duration": 6000, "damage": [10, 25], "hint": "The ground is shaking! Everyone brace and hang on!" },
-    { "id": "typhoon", "name": "Typhoon", "icon": "🌪️", "duration": 7000, "damage": [8, 18], "hint": "Fierce winds and flying debris are battering the house!" },
-    { "id": "meteor_shower", "name": "Meteor Shower", "icon": "☄️", "duration": 6000, "damage": [10, 30], "hint": "Meteors are falling from the sky — take cover!" }
+    { "id": "earthquake", "name": "Earthquake", "icon": "🌍", "duration": 6000, "damage": [10, 25], "hint": "The ground is shaking! Everyone brace and hang on!", "shelterDamage": [5, 15], "furnitureDamageChance": 0.3 },
+    { "id": "typhoon", "name": "Typhoon", "icon": "🌪️", "duration": 7000, "damage": [8, 18], "hint": "Fierce winds and flying debris are battering the house!", "shelterDamage": [8, 18], "furnitureDamageChance": 0.4 },
+    { "id": "meteor_shower", "name": "Meteor Shower", "icon": "☄️", "duration": 6000, "damage": [10, 30], "hint": "Meteors are falling from the sky — take cover!", "shelterDamage": [10, 25], "furnitureDamageChance": 0.5, "piercesRoof": true }
+  ],
+  "quizQuestions": [
+    { "q": "What is RA 10121?", "options": ["Disaster Risk Reduction and Management Act", "Environmental Protection Act", "Building Safety Code", "National Emergency Protocol"], "correct": 0 },
+    { "q": "What is Disaster Risk?", "options": ["The probability of a disaster occurring", "The damage caused by a disaster", "The number of casualties", "The cost of recovery"], "correct": 0 },
+    { "q": "What is the difference between a hazard and a disaster?", "options": ["A hazard is a potential threat; a disaster is when it causes damage", "They are the same thing", "A disaster is always natural", "A hazard only refers to earthquakes"], "correct": 0 },
+    { "q": "What does 'resilience' mean in DRRR?", "options": ["The ability to recover from disasters", "The ability to prevent disasters", "The strength of buildings", "The speed of evacuation"], "correct": 0 },
+    { "q": "Which is an example of a natural hazard?", "options": ["Typhoon", "Car accident", "Fireworks", "Power outage"], "correct": 0 },
+    { "q": "What is the first step in disaster preparedness?", "options": ["Identify hazards and assess risks", "Buy emergency supplies", "Build a safe house", "Install alarm systems"], "correct": 0 },
+    { "q": "What is an evacuation plan?", "options": ["A strategy for safely leaving a danger zone", "A plan for rebuilding after a disaster", "A list of emergency contacts", "A schedule for disaster drills"], "correct": 0 },
+    { "q": "What is a 'safe room' designed for?", "options": ["Protection during a disaster event", "Storing food supplies", "Entertainment during storms", "Sleeping during emergencies"], "correct": 0 },
+    { "q": "What does an early warning system do?", "options": ["Alerts people before a disaster strikes", "Prevents disasters from happening", "Counts casualties after a disaster", "Delivers relief goods"], "correct": 0 },
+    { "q": "Which is a man-made hazard?", "options": ["Industrial fire", "Earthquake", "Volcanic eruption", "Lightning"], "correct": 0 },
+    { "q": "What is the purpose of a first aid kit?", "options": ["Provide immediate medical treatment", "Prevent disasters", "Signal for help", "Store food"], "correct": 0 },
+    { "q": "What is 'search and rescue'?", "options": ["Finding and helping people trapped in disasters", "Looking for lost items", "Exploring new areas", "Training rescue dogs"], "correct": 0 },
+    { "q": "What should you do during an earthquake?", "options": ["Drop, Cover, and Hold On", "Run outside immediately", "Stand in a doorway", "Call emergency services"], "correct": 0 },
+    { "q": "What is community-based disaster risk reduction?", "options": ["Involving local communities in disaster preparedness", "Government-only disaster response", "Military-led rescue operations", "International aid distribution"], "correct": 0 },
+    { "q": "What is a typhoon's 'eye'?", "options": ["The calm center of the storm", "The most destructive part", "The outer wall of wind", "The area where it makes landfall"], "correct": 0 },
+    { "q": "What does 'mitigation' mean in disaster management?", "options": ["Reducing the impact of disasters", "Responding to emergencies", "Rebuilding after damage", "Predicting future events"], "correct": 0 },
+    { "q": "What is the Ring of Fire?", "options": ["A zone of frequent earthquakes and volcanoes around the Pacific Ocean", "A forest fire containment method", "A type of emergency signal", "A volcanic eruption pattern"], "correct": 0 },
+    { "q": "What is flood insurance?", "options": ["Financial protection against flood damage", "A type of health insurance", "Insurance for flood rescue teams", "A policy for building dams"], "correct": 0 },
+    { "q": "What is a 'disaster drill'?", "options": ["A practice exercise for emergency response", "A tool for measuring earthquake intensity", "A method for predicting typhoons", "A type of construction technique"], "correct": 0 },
+    { "q": "What role do volunteers play in DRRR?", "options": ["They assist in preparedness, response, and recovery efforts", "They only help during reconstruction", "They are only needed for fundraising", "They have no role in DRRR"], "correct": 0 },
+    { "q": "What is seismic intensity?", "options": ["A measure of earthquake effects at a specific location", "The speed of tectonic plates", "The depth of an earthquake", "The duration of tremors"], "correct": 0 },
+    { "q": "What is a 'shelter-in-place' strategy?", "options": ["Staying inside a sturdy building during a disaster", "Evacuating to a designated camp", "Moving to higher ground", "Leaving the country"], "correct": 0 }
+  ],
+  "essayQuestions": [
+    { "q": "A typhoon is approaching your community. You have 2 hours to prepare. What are the top 3 actions you would take and why?", "maxChars": 50 },
+    { "q": "After an earthquake, your neighbor is trapped under debris. Describe the steps you would take to help them safely.", "maxChars": 50 },
+    { "q": "Your school is in a flood-prone area. Propose a simple disaster preparedness plan for students.", "maxChars": 50 },
+    { "q": "Explain how a community early warning system can save lives during a volcanic eruption.", "maxChars": 50 },
+    { "q": "A classmate says 'Disasters only happen to other people.' How would you respond to change their mindset?", "maxChars": 50 },
+    { "q": "Describe the difference between being prepared and being paranoid about disasters.", "maxChars": 50 },
+    { "q": "If you could design a safe house, what features would it have and why?", "maxChars": 50 },
+    { "q": "How can technology help reduce disaster risks in your community?", "maxChars": 50 }
   ],
   "gameSettings": {
     "totalRounds": 10,
     "disasterMinIntervalMs": 60000,
     "disasterMaxIntervalMs": 120000,
     "warningDurationMs": 5000,
-    "lookoutEarlyMs": 3000
+    "lookoutEarlyMs": 3000,
+    "constructionTimeMs": 20000,
+    "quizTimeMs": 15000,
+    "essayTimeMs": 60000,
+    "scavengeCooldownMs": 10000,
+    "hungerDecayRate": 1,
+    "hungerDamageRate": 2,
+    "hungerThreshold": 20
   }
 }
