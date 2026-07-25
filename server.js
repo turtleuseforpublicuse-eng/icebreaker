@@ -1,594 +1,755 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const config = require('./config.json');
 
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*' }
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/config', express.static(path.join(__dirname, 'config.json')));
+
+const ShelterManager = require('./lib/shelterManager');
 const DisasterManager = require('./lib/disasterManager');
 const RoleManager = require('./lib/roleManager');
-const ShelterManager = require('./lib/shelterManager');
 const ItemManager = require('./lib/itemManager');
-const QuizManager = require('./lib/quizManager');
 const RequestManager = require('./lib/requestManager');
+const QuizManager = require('./lib/quizManager');
 
-app.use(express.static(__dirname));
+const games = new Map();
 
-const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-const events = config.events;
-
-const GRAVITY = 1.3;
-const JUMP_SPEED = 15;
-const MOVE_SPEED = 6;
-const TICK_MS = 50;
-const PLAYER_MIN_X = 20;
-const PLAYER_MAX_X = 780;
-
-let players = {};
-let socketToRole = {};
-let roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-let gameStarted = false;
-let currentRound = 0;
-let totalRounds = config.gameSettings?.totalRounds || 10;
-let roles = config.roles.map(r => ({ ...r, takenBy: null }));
-let gameOver = false;
-let eventActive = false;
-
-const shelterManager = new ShelterManager({
-  furnitureConfig: config.furniture,
-  io,
-  getPlayers: () => players,
-  getGameStarted: () => gameStarted
-});
-
-const itemManager = new ItemManager({
-  itemsConfig: config.items,
-  scavengeSpots: config.scavengeSpots,
-  io,
-  getPlayers: () => players
-});
-
-const disasterManager = new DisasterManager({
-  events,
-  io,
-  getPlayers: () => players,
-  getGameStarted: () => gameStarted,
-  shelterManager,
-  itemManager,
-  onDisasterStart: () => {
-    eventActive = true;
-    io.emit('eventActiveUpdate', { eventActive: true });
-  },
-  onDisasterEnd: (ev) => {
-    eventActive = false;
-    io.emit('eventActiveUpdate', { eventActive: false });
-    currentRound++;
-    io.emit('roundUpdate', { current: currentRound, total: totalRounds });
-    if (currentRound >= totalRounds) _checkWinner();
-    _checkAllDead();
+class Game {
+  constructor(hostId, roomCode, gameSettings) {
+    this.hostId = hostId;
+    this.roomCode = roomCode;
+    this.players = {};
+    this.isGameStarted = false;
+    this.isGameFinished = false;
+    this.currentRound = 0;
+    this.maxRounds = gameSettings.totalRounds || 10;
+    this.currentEvent = null;
+    this.currentEventName = null;
+    this.eventTimer = null;
+    this.quizzes = [];
+    this.currentQuiz = null;
+    this.quizCooldown = false;
+    this.shelter = new ShelterManager(config);
+    this.disasterManager = new DisasterManager(this);
+    this.roleManager = new RoleManager(this);
+    this.itemManager = new ItemManager(this);
+    this.requestManager = new RequestManager(this);
+    this.quizManager = new QuizManager(this);
+    this.config = config;
+    this.io = io;
+    this.hungerDecayTimer = null;
+    this.dayNightTimer = null;
+    this.dayNightState = 'day';
+    this.timeRemaining = config.gameSettings.dayNightCycleMs;
+    this.usedQuizzes = [];
+    this.usedEssays = [];
+    this.totalPoints = 0;
+    this.eventScores = {};
+    this.eventPoints = {};
   }
-});
 
-const roleManager = new RoleManager({
-  getRoles: () => roles,
-  getPlayers: () => players,
-  getSocketToRole: () => socketToRole,
-  io
-});
+  addPlayer(id, name, icon) {
+    this.players[id] = {
+      id: id,
+      name: name,
+      icon: icon,
+      role: null,
+      health: 100,
+      hunger: 100,
+      inventory: [],
+      hiding: false,
+      hidingIn: null,
+      currentEvent: null,
+      safeFromCurrentDisaster: false,
+      isDead: false,
+      deathCause: null,
+      isSpectator: false,
+      rolePowerUsed: false,
+      rolePowerUsedThisEvent: false,
+      requestsSent: 0,
+      requestsReceived: 0,
+      totalPoints: 0,
+      eventPoints: 0,
+      medicRequestCount: 0
+    };
+  }
 
-const quizManager = new QuizManager({
-  quizQuestions: config.quizQuestions,
-  essayQuestions: config.essayQuestions,
-  io,
-  getPlayers: () => players,
-  getGameStarted: () => gameStarted
-});
-
-const requestManager = new RequestManager({
-  io,
-  getPlayers: () => players,
-  itemsConfig: config.items
-});
-
-function _checkWinner() {
-  if (gameOver) return;
-  const alive = Object.entries(players).filter(([_, p]) => p.isAlive);
-  if (alive.length <= 1 || currentRound >= totalRounds) {
-    gameOver = true;
-    disasterManager.stopAutoSchedule();
-    let winner = null;
-    let bestScore = -1;
-    for (const [rid, p] of alive) {
-      const score = p.health + p.hunger;
-      if (score > bestScore) { bestScore = score; winner = rid; }
+  assignRoles() {
+    const roles = [...config.roles];
+    const playerIds = Object.keys(this.players);
+    for (const id of playerIds) {
+      const idx = Math.floor(Math.random() * roles.length);
+      this.players[id].role = roles[idx];
+      roles.splice(idx, 1);
     }
-    if (!winner && alive.length === 0) {
-      for (const [rid, p] of Object.entries(players)) {
-        if (!winner || p.health > players[winner].health) winner = rid;
+  }
+
+  sendGameState() {
+    const state = {
+      hostId: this.hostId,
+      roomCode: this.roomCode,
+      isGameStarted: this.isGameStarted,
+      isGameFinished: this.isGameFinished,
+      currentRound: this.currentRound,
+      maxRounds: this.maxRounds,
+      currentEvent: this.currentEventName,
+      shelter: this.shelter.getState(),
+      players: {}
+    };
+
+    for (const [id, p] of Object.entries(this.players)) {
+      state.players[id] = {
+        id: p.id,
+        name: p.name,
+        icon: p.icon,
+        role: p.role,
+        health: p.health,
+        hunger: p.hunger,
+        inventory: p.inventory,
+        hiding: p.hiding,
+        hidingIn: p.hidingIn,
+        currentEvent: p.currentEvent,
+        safeFromCurrentDisaster: p.safeFromCurrentDisaster,
+        isDead: p.isDead,
+        deathCause: p.deathCause,
+        isSpectator: p.isSpectator,
+        totalPoints: p.totalPoints,
+        eventPoints: p.eventPoints,
+        medicRequestCount: p.medicRequestCount
+      };
+    }
+
+    io.to(this.hostId).emit('gameState', state);
+    for (const id of Object.keys(this.players)) {
+      if (id !== this.hostId) {
+        io.to(id).emit('gameState', state);
       }
     }
-    if (winner && players[winner]) {
-      io.emit('gameOver', {
-        winnerId: winner,
-        winnerName: players[winner].name,
-        winnerIcon: players[winner].roleIcon,
-        reason: currentRound >= totalRounds ? 'Time\'s up!' : 'Last survivor!'
+  }
+
+  sendPlayerUpdates() {
+    for (const [id, p] of Object.entries(this.players)) {
+      io.to(id).emit('playerUpdate', {
+        id: p.id,
+        name: p.name,
+        icon: p.icon,
+        role: p.role,
+        health: p.health,
+        hunger: p.hunger,
+        inventory: p.inventory,
+        hiding: p.hiding,
+        hidingIn: p.hidingIn,
+        currentEvent: p.currentEvent,
+        safeFromCurrentDisaster: p.safeFromCurrentDisaster,
+        isDead: p.isDead,
+        deathCause: p.deathCause,
+        isSpectator: p.isSpectator,
+        totalPoints: p.totalPoints,
+        eventPoints: p.eventPoints,
+        medicRequestCount: p.medicRequestCount
       });
     }
   }
-}
 
-function _checkAllDead() {
-  if (gameOver) return;
-  const alive = Object.values(players).filter(p => p.isAlive);
-  if (alive.length === 1) {
-    const last = Object.entries(players).find(([_, p]) => p.isAlive);
-    if (last) {
-      gameOver = true;
-      disasterManager.stopAutoSchedule();
-      io.emit('gameOver', { winnerId: last[0], winnerName: last[1].name, winnerIcon: last[1].roleIcon, reason: 'Last survivor!' });
+  emitTimeUpdate() {
+    const timeData = {
+      dayNightState: this.dayNightState,
+      timeRemaining: this.timeRemaining,
+      currentRound: this.currentRound,
+      maxRounds: this.maxRounds,
+      eventActive: !!this.currentEvent,
+      eventName: this.currentEventName
+    };
+    io.to(this.hostId).emit('timeUpdate', timeData);
+    for (const id of Object.keys(this.players)) {
+      if (id !== this.hostId) {
+        io.to(id).emit('timeUpdate', timeData);
+      }
     }
-  } else if (alive.length === 0) {
-    gameOver = true;
-    disasterManager.stopAutoSchedule();
-    io.emit('gameOver', { winnerId: null, winnerName: 'Nobody', winnerIcon: '\uD83D\uDC80', reason: 'Everyone perished!' });
   }
-}
 
-function resetGame() {
-  players = {};
-  socketToRole = {};
-  roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-  gameStarted = false;
-  currentRound = 0;
-  gameOver = false;
-  eventActive = false;
-  roles = config.roles.map(r => ({ ...r, takenBy: null }));
-  disasterManager.reset();
-  roleManager.reset();
-  shelterManager.reset();
-  itemManager.reset();
-  quizManager.reset();
-  requestManager.reset();
-}
+  markDetected(event) {
+    this.currentEventName = event.name;
 
-function makeFreshPlayer(roleDef, data) {
-  return {
-    name: (data.name || '').trim().slice(0, 12),
-    roleName: roleDef.name,
-    roleIcon: roleDef.icon,
-    roleId: roleDef.id,
-    color: data.color || '#43e97b',
-    x: Math.floor(Math.random() * 550) + 120,
-    floor: 1,
-    offsetY: 0,
-    vy: 0,
-    moving: { left: false, right: false },
-    health: 100,
-    hunger: 100,
-    isAlive: true,
-    connected: true,
-    socketId: null,
-    inventory: [],
-    essayImmunity: false,
-    medicRequestCount: 0,
-    hidingIn: null
-  };
-}
+    for (const [id, p] of Object.entries(this.players)) {
+      p.currentEvent = event.id;
+      p.hiding = false;
+      p.hidingIn = null;
+      p.safeFromCurrentDisaster = false;
+      p.rolePowerUsedThisEvent = false;
+    }
 
-function attachSocket(player, socketId) { if (player) player.socketId = socketId; }
+    io.to(this.hostId).emit('disasterDetected', {
+      eventId: event.id,
+      eventName: event.name,
+      eventIcon: event.icon,
+      hint: event.hint
+    });
 
-function broadcastGameState() {
-  io.emit('updatePlayers', players);
-  io.emit('updateRoles', roles);
-  io.emit('shelterUpdate', shelterManager.getState());
-}
+    for (const [id, p] of Object.entries(this.players)) {
+      if (id !== this.hostId) {
+        io.to(id).emit('disasterDetected', {
+          eventId: event.id,
+          eventName: event.name,
+          eventIcon: event.icon,
+          hint: event.hint
+        });
+      }
+    }
 
-function canUseAbility(roleName) {
-  if (roleName === 'Lookout' || roleName === 'Scavenger') return true;
-  return !eventActive;
-}
-
-function findNearbyFurniture(player) {
-  for (const fid in shelterManager.furniture) {
-    const f = shelterManager.furniture[fid];
-    if (f.destroyed || f.floor !== player.floor) continue;
-    const dist = Math.abs(player.x - (f.x + f.w / 2));
-    if (dist < f.w * 1.2) return { id: fid, furniture: f };
+    this.emitTimeUpdate();
+    this.sendGameState();
   }
-  return null;
+
+  startHungerDecay() {
+    if (this.hungerDecayTimer) clearInterval(this.hungerDecayTimer);
+    this.hungerDecayTimer = setInterval(() => {
+      for (const [id, p] of Object.entries(this.players)) {
+        if (p.isDead || p.isSpectator) continue;
+        p.hunger = Math.max(0, p.hunger - config.gameSettings.hungerDecayRate);
+        if (p.hunger <= 0) {
+          p.health = Math.max(0, p.health - config.gameSettings.hungerDamageRate);
+          if (p.health <= 0) {
+            p.health = 0;
+            p.isDead = true;
+            p.deathCause = 'Starvation';
+          }
+        }
+      }
+      this.sendPlayerUpdates();
+    }, 5000);
+  }
+
+  stopHungerDecay() {
+    if (this.hungerDecayTimer) {
+      clearInterval(this.hungerDecayTimer);
+      this.hungerDecayTimer = null;
+    }
+  }
+
+  startDayNightCycle() {
+    if (this.dayNightTimer) clearInterval(this.dayNightTimer);
+    this.dayNightTimer = setInterval(() => {
+      this.timeRemaining -= 1000;
+      if (this.timeRemaining <= 0) {
+        this.dayNightState = this.dayNightState === 'day' ? 'night' : 'day';
+        this.timeRemaining = config.gameSettings.dayNightCycleMs;
+        io.emit('dayNightChange', {
+          state: this.dayNightState,
+          timeRemaining: this.timeRemaining
+        });
+      }
+      this.emitTimeUpdate();
+    }, 1000);
+  }
+
+  stopDayNightCycle() {
+    if (this.dayNightTimer) {
+      clearInterval(this.dayNightTimer);
+      this.dayNightTimer = null;
+    }
+  }
+
+  startGame() {
+    this.isGameStarted = true;
+    this.assignRoles();
+    this.startHungerDecay();
+    this.startDayNightCycle();
+    this.shelter.startConstructorRepair(io);
+    this.sendGameState();
+    this.sendPlayerUpdates();
+
+    for (const [id, p] of Object.entries(this.players)) {
+      io.to(id).emit('gameStarted', {
+        role: p.role,
+        player: {
+          id: p.id,
+          name: p.name,
+          icon: p.icon,
+          health: p.health,
+          hunger: p.hunger,
+          inventory: p.inventory
+        }
+      });
+    }
+
+    setTimeout(() => {
+      this.disasterManager.startDisasterCycle(io);
+    }, 5000);
+  }
+
+  endGame(reason) {
+    this.isGameFinished = true;
+    this.disasterManager.cancel();
+    this.stopHungerDecay();
+    this.stopDayNightCycle();
+    this.shelter.stopConstructorRepair();
+
+    const rankings = Object.values(this.players)
+      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+      .map((p, i) => ({
+        rank: i + 1,
+        name: p.name,
+        icon: p.icon,
+        role: p.role ? p.role.name : 'Unknown',
+        totalPoints: p.totalPoints || 0,
+        isDead: p.isDead,
+        deathCause: p.deathCause
+      }));
+
+    io.emit('gameOver', {
+      reason: reason,
+      rankings: rankings,
+      shelter: this.shelter.getState()
+    });
+  }
 }
 
 io.on('connection', (socket) => {
-  console.log('Connected:', socket.id);
+  console.log('Player connected:', socket.id);
 
-  socket.on('requestHostData', () => {
-    socket.emit('hostData', { roomCode, gameStarted, currentRound, totalRounds, shelterIntegrity: shelterManager.shelterIntegrity });
-    socket.emit('updatePlayers', players);
-    socket.emit('updateRoles', roles);
-    socket.emit('shelterUpdate', shelterManager.getState());
-    socket.emit('furnitureState', shelterManager.furniture);
-    socket.emit('eventActiveUpdate', { eventActive });
-  });
-
-  socket.on('startGame', () => {
-    if (Object.keys(players).length === 0) return;
-    gameStarted = true;
-    currentRound = 1;
-    gameOver = false;
-    io.emit('gameStarted');
-    io.emit('roundUpdate', { current: currentRound, total: totalRounds });
-    io.emit('shelterUpdate', shelterManager.getState());
-    io.emit('furnitureState', shelterManager.furniture);
-    disasterManager.startAutoSchedule();
-  });
-
-  socket.on('resetGame', () => { disasterManager.stopAutoSchedule(); resetGame(); io.emit('gameReset'); });
-
-  socket.on('verifyRoom', (code) => {
-    if ((code || '').toUpperCase() !== roomCode) return socket.emit('joinError', 'Invalid room code!');
-    if (!gameStarted) return socket.emit('roomVerified', { rejoin: false, roles });
-    const options = Object.values(players).filter(p => !p.connected).map(p => ({ roleId: p.roleId, name: p.name, roleIcon: p.roleIcon, roleName: p.roleName }));
-    if (options.length === 0) return socket.emit('joinError', 'The game already started and every seat is taken!');
-    socket.emit('roomVerified', { rejoin: true, options });
-  });
-
-  socket.on('reclaimSeat', (data) => {
-    const p = players[data.roleId];
-    if (!p || p.connected) return socket.emit('joinError', 'That seat is no longer available.');
-    p.connected = true; attachSocket(p, socket.id); socketToRole[socket.id] = data.roleId;
-    socket.emit('rejoinSuccess', p); io.emit('updatePlayers', players);
+  socket.on('createGame', (data) => {
+    const roomCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+    const game = new Game(socket.id, roomCode, config.gameSettings);
+    games.set(roomCode, game);
+    game.addPlayer(socket.id, data.hostName || 'Host', data.hostIcon || '🏠');
+    socket.join(roomCode);
+    socket.gameRoom = roomCode;
+    socket.emit('gameCreated', { roomCode: roomCode, hostId: socket.id });
+    game.sendGameState();
   });
 
   socket.on('joinGame', (data) => {
-    if (gameStarted) return socket.emit('joinError', 'The game has already started!');
-    const name = (data.name || '').trim().slice(0, 12);
-    if (!name) return socket.emit('joinError', 'Please enter a name!');
-    const roleIndex = roles.findIndex(r => r.id === data.roleId);
-    if (roleIndex === -1 || roles[roleIndex].takenBy) return socket.emit('joinError', 'That role was just taken!');
-    roles[roleIndex].takenBy = name;
-    const player = makeFreshPlayer(roles[roleIndex], data);
-    attachSocket(player, socket.id);
-    players[data.roleId] = player;
-    socketToRole[socket.id] = data.roleId;
-    io.emit('updateRoles', roles); io.emit('updatePlayers', players); socket.emit('joinSuccess', player);
+    const roomCode = data.roomCode;
+    const game = games.get(roomCode);
+    if (!game) {
+      socket.emit('error', { message: 'Room not found.' });
+      return;
+    }
+    if (game.isGameStarted) {
+      socket.emit('error', { message: 'Game already started.' });
+      return;
+    }
+
+    game.addPlayer(socket.id, data.playerName, data.playerIcon);
+    socket.join(roomCode);
+    socket.gameRoom = roomCode;
+    socket.emit('gameJoined', { roomCode: roomCode, playerId: socket.id });
+    game.sendGameState();
   });
 
-  socket.on('moveStart', (direction) => {
-    const p = players[socketToRole[socket.id]];
-    if (!gameStarted || !p || !p.isAlive) return;
-    if (direction === 'left' || direction === 'right') p.moving[direction] = true;
+  socket.on('startGame', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game || game.hostId !== socket.id) return;
+    game.startGame();
   });
 
-  socket.on('moveStop', (direction) => {
-    const p = players[socketToRole[socket.id]];
-    if (!p) return;
-    if (direction === 'left' || direction === 'right') p.moving[direction] = false;
+  socket.on('playerMove', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || player.isDead || player.isSpectator) return;
+
+    const PLAYER_MIN_X = 20;
+    const PLAYER_MAX_X = 780;
+    const clampedX = Math.max(PLAYER_MIN_X, Math.min(PLAYER_MAX_X, data.x));
+
+    io.to(roomCode).emit('playerMoved', {
+      id: socket.id,
+      x: clampedX,
+      y: data.y,
+      direction: data.direction
+    });
   });
 
-  socket.on('jump', () => {
-    const p = players[socketToRole[socket.id]];
-    if (!gameStarted || !p || !p.isAlive) return;
-    if (p.offsetY === (p.floor === 2 ? 200 : 0)) p.vy = JUMP_SPEED;
+  socket.on('playerMoveStart', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || player.isDead || player.isSpectator) return;
+
+    io.to(roomCode).emit('playerMoveStart', {
+      id: socket.id,
+      direction: data.direction
+    });
   });
 
-  socket.on('useStairs', (direction) => {
-    const p = players[socketToRole[socket.id]];
-    if (!gameStarted || !p || !p.isAlive) return;
-    const nearStairs = p.x > 370 && p.x < 430;
-    if (direction === 'up' && p.floor === 1 && nearStairs) { p.floor = 2; p.offsetY = 200; }
-    else if (direction === 'down' && p.floor === 2 && nearStairs) { p.floor = 1; p.offsetY = 0; }
-    io.emit('updatePlayers', players);
+  socket.on('playerMoveStop', (data) => {
+    const roomCode = socket.gameRoom;
+    io.to(roomCode).emit('playerMoveStop', { id: socket.id });
   });
 
-  socket.on('detectDisaster', () => {
-    const roleId = socketToRole[socket.id];
-    const p = players[roleId];
-    if (!p || p.roleName !== 'Lookout') return;
-    if (disasterManager.markDetected()) socket.emit('detectSuccess', { message: 'Disaster detected! Team gets a calm heads-up.' });
+  socket.on('playerRespawn', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || !player.isDead) return;
+
+    player.isDead = false;
+    player.health = 100;
+    player.hunger = 100;
+    player.deathCause = null;
+    player.isSpectator = true;
+    player.inventory = [];
+
+    game.sendPlayerUpdates();
+    game.sendGameState();
+
+    io.to(socket.id).emit('respawnComplete', {
+      playerId: socket.id,
+      isSpectator: true
+    });
   });
 
-  socket.on('hideInFurniture', (furnitureId) => {
-    const roleId = socketToRole[socket.id];
-    if (!roleId) return;
-    const result = shelterManager.hideInFurniture(roleId, furnitureId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: `Hiding in ${result.furnitureName}! (-${result.durabilityLoss} durability)` });
-  });
+  socket.on('chooseScavengeSpot', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
 
-  socket.on('unhide', () => {
-    const roleId = socketToRole[socket.id];
-    if (!roleId) return;
-    shelterManager.unhiding(roleId);
-  });
+    const player = game.players[socket.id];
+    if (!player || player.isDead || player.isSpectator) return;
 
-  socket.on('housekeeperRestore', () => {
-    const roleId = socketToRole[socket.id];
-    if (!roleId) return;
-    const result = shelterManager.housekeeperRestore(roleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    if (result.complete) {
-      io.emit('actionSuccess', { message: 'Both Housekeepers restored all furniture!' });
+    if (!player.role || (player.role.id !== 'scv1' && player.role.id !== 'scv2')) {
+      socket.emit('error', { message: 'Only Scavengers can scavenge.' });
+      return;
+    }
+
+    if (game.currentEvent) {
+      socket.emit('error', { message: 'Cannot scavenge during an event.' });
+      return;
+    }
+
+    if (player.rolePowerUsedThisEvent) {
+      socket.emit('error', { message: 'You can only scavenge once per event.' });
+      return;
+    }
+
+    const spot = config.scavengeSpots.find(s => s.id === data.spotId);
+    if (!spot) {
+      socket.emit('error', { message: 'Invalid scavenge spot.' });
+      return;
+    }
+
+    const result = game.itemManager.scavenge(socket.id, spot.id);
+    if (result.success) {
+      player.rolePowerUsedThisEvent = true;
+      socket.emit('scavengeResult', {
+        items: result.items,
+        message: result.message
+      });
+      game.sendPlayerUpdates();
     } else {
-      socket.emit('actionSuccess', { message: `Clicked restore. Waiting for ${result.waitingFor.join(' and ')}...` });
+      socket.emit('error', { message: result.message });
     }
   });
 
-  socket.on('medicHeal', (targetRoleId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    if (!canUseAbility(players[fromRoleId]?.roleName)) return socket.emit('actionError', 'You can only use this ability after an event!');
-    const result = roleManager.heal(fromRoleId, targetRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: `Healed ${result.healed}!` });
-  });
+  socket.on('useItem', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
 
-  socket.on('caretakerRepair', (furnitureId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    if (!canUseAbility(players[fromRoleId]?.roleName)) return socket.emit('actionError', 'You can only use this ability after an event!');
-    const result = roleManager.caretakerRepair(fromRoleId, shelterManager, furnitureId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: result.repaired ? `Repaired ${result.repaired}!` : 'Shelter repaired!' });
-  });
-
-  socket.on('scavenge', (spotId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = roleManager.scavenge(fromRoleId, spotId, itemManager);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: `Found ${result.item.name}!` });
-  });
-
-  socket.on('useItem', (inventoryIndex) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = itemManager.useItem(fromRoleId, inventoryIndex);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: `${result.item}: ${result.effects.join(', ')}` });
-  });
-
-  socket.on('shareFood', (targetRoleId, inventoryIndex) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = itemManager.shareFood(fromRoleId, targetRoleId, inventoryIndex);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: `Shared food! (+${result.amount} Food)` });
-  });
-
-  socket.on('useRepairKit', (inventoryIndex) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = itemManager.useRepairKit(fromRoleId, inventoryIndex, shelterManager);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: `Repaired shelter +${result.repaired}!` });
-  });
-
-  socket.on('initializeConstruction', () => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    if (!canUseAbility(players[fromRoleId]?.roleName)) return socket.emit('actionError', 'You can only use this ability after an event!');
-    const result = shelterManager.initializeConstruction(fromRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-  });
-
-  socket.on('startConstruction', () => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    if (!canUseAbility(players[fromRoleId]?.roleName)) return socket.emit('actionError', 'You can only use this ability after an event!');
-    const result = shelterManager.startConstruction(fromRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-  });
-
-  socket.on('throwQuiz', () => {
-    disasterManager.pause();
-    const result = quizManager.throwQuiz();
-    if (!result.ok) { disasterManager.resume(); return socket.emit('actionError', result.error); }
-  });
-
-  socket.on('submitQuizAnswer', (answerIndex) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = quizManager.submitQuizAnswer(fromRoleId, answerIndex);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('quizAnswered', { isCorrect: result.isCorrect });
-  });
-
-  socket.on('throwEssay', () => {
-    disasterManager.pause();
-    const result = quizManager.throwEssay();
-    if (!result.ok) { disasterManager.resume(); return socket.emit('actionError', result.error); }
-  });
-
-  socket.on('submitEssay', (text) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = quizManager.submitEssay(fromRoleId, text);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('essaySubmitted');
-  });
-
-  socket.on('voteEssay', (targetRoleId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = quizManager.voteEssay(fromRoleId, targetRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('voteSubmitted');
-  });
-
-  socket.on('quizComplete', () => { disasterManager.resume(); });
-  socket.on('essayComplete', () => { disasterManager.resume(); });
-
-  socket.on('triggerDisaster', () => {
-    const evts = config.events;
-    const ev = evts[Math.floor(Math.random() * evts.length)];
-    disasterManager._clearTimers();
-    disasterManager._beginWarningSequence(ev, true);
-  });
-
-  socket.on('requestMedic', () => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const player = players[fromRoleId];
-    if (!player || !player.isAlive) return;
-    if (player.health >= 50) return socket.emit('actionError', 'You can only request a Medic below 50 health!');
-    if (player.medicRequestCount >= 2) return socket.emit('actionError', 'No more Medic requests! You have used all 2. Use food/water instead.');
-    const medics = Object.entries(players).filter(([rid, p]) => p.roleName === 'Medic' && p.isAlive && p.connected && rid !== fromRoleId);
-    if (medics.length === 0) return socket.emit('actionError', 'No Medic available!');
-    socket.emit('medicSelectShow', { medics: medics.map(([rid, p]) => ({ roleId: rid, name: p.name, roleIcon: p.roleIcon })) });
-  });
-
-  socket.on('requestMedicTarget', (targetRoleId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    players[fromRoleId].medicRequestCount = (players[fromRoleId].medicRequestCount || 0) + 1;
-    const result = requestManager.createRequest('heal', fromRoleId, targetRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-  });
-
-  socket.on('requestFood', () => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const scavengers = Object.entries(players).filter(([rid, p]) => p.roleName === 'Scavenger' && p.isAlive && p.connected && rid !== fromRoleId);
-    if (scavengers.length === 0) return socket.emit('actionError', 'No Scavenger available!');
-    socket.emit('scavengerSelectShow', { scavengers: scavengers.map(([rid, p]) => ({ roleId: rid, name: p.name, roleIcon: p.roleIcon })) });
-  });
-
-  socket.on('requestFoodTarget', (targetRoleId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = requestManager.createRequest('food', fromRoleId, targetRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-  });
-
-  socket.on('shareFoodItem', (requestId, itemId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const player = players[fromRoleId];
-    if (!player || !player.isAlive) return;
-
-    const reqIdx = requestManager.pendingRequests.findIndex(r => r.id === requestId && r.status === 'pending' && r.targetRoleId === fromRoleId);
-    if (reqIdx === -1) return socket.emit('actionError', 'Request not found or already handled.');
-
-    const itemIdx = (player.inventory || []).findIndex(i => i.id === itemId);
-    if (itemIdx === -1) return socket.emit('actionError', 'You do not have that item!');
-
-    const item = player.inventory.splice(itemIdx, 1)[0];
-    const request = requestManager.pendingRequests[reqIdx];
-    request.sharedItemId = item.id;
-    request.status = 'accepted';
-
-    const toPlayer = players[request.fromRoleId];
-    if (toPlayer) {
-      const itemDef = requestManager.getItemDef(item.id);
-      if (itemDef) {
-        if (itemDef.hungerRestore) toPlayer.hunger = Math.min(100, toPlayer.hunger + itemDef.hungerRestore);
-        if (itemDef.healthRestore) toPlayer.health = Math.min(100, toPlayer.health + itemDef.healthRestore);
-      }
-      if (toPlayer.socketId) io.to(toPlayer.socketId).emit('actionSuccess', { message: player.name + ' shared ' + item.icon + ' ' + item.name + ' with you!' });
+    const result = game.itemManager.useItem(socket.id, data.itemId, io);
+    if (result.success) {
+      game.sendPlayerUpdates();
+    } else {
+      socket.emit('error', { message: result.message });
     }
-    if (player.socketId) io.to(player.socketId).emit('actionSuccess', { message: 'You shared ' + item.icon + ' ' + item.name + ' with ' + (toPlayer ? toPlayer.name : 'someone') + '!' });
-
-    io.emit('updatePlayers', players);
   });
 
-  socket.on('requestEngineer', () => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = requestManager.createRequest('engineer_init', fromRoleId);
-    if (!result.ok) return socket.emit('actionError', result.error);
-    socket.emit('actionSuccess', { message: 'Engineer has been alerted!' });
+  socket.on('hideInFurniture', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || player.isDead || player.isSpectator) return;
+
+    if (!game.currentEvent) {
+      socket.emit('error', { message: 'No active event to hide from.' });
+      return;
+    }
+
+    const result = game.shelter.hideInFurniture(player, data.furnitureId);
+    if (result.success) {
+      game.sendPlayerUpdates();
+      io.to(roomCode).emit('playerHidden', {
+        playerId: socket.id,
+        furnitureId: data.furnitureId,
+        furnitureName: result.furniture.name
+      });
+    } else {
+      socket.emit('error', { message: result.reason });
+    }
   });
 
-  socket.on('requestRoleSwap', (targetRoleId) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId || !gameStarted) return;
-    const result = roleManager.requestSwap(fromRoleId, targetRoleId);
-    if (!result.ok) return socket.emit('swapError', result.error);
-    socket.emit('swapRequestSent', { targetName: result.targetName });
-    const target = players[targetRoleId];
-    if (target && target.socketId) {
-      io.to(target.socketId).emit('roleSwapRequest', {
-        fromRoleId, fromName: players[fromRoleId].name, fromRoleName: players[fromRoleId].roleName, fromRoleIcon: players[fromRoleId].roleIcon
+  socket.on('unhide', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || player.isDead || player.isSpectator) return;
+
+    const result = game.shelter.unhide(player);
+    if (result.success) {
+      game.sendPlayerUpdates();
+      io.to(roomCode).emit('playerUnhidden', {
+        playerId: socket.id
       });
     }
   });
 
-  socket.on('respondRoleSwap', (data) => {
-    const toRoleId = socketToRole[socket.id];
-    if (!toRoleId) return;
-    const result = roleManager.respondSwap(toRoleId, !!data.accept);
-    if (!result.ok) return socket.emit('swapError', result.error);
-    if (result.accepted && result.swapped) {
-      broadcastGameState();
-      result.swapped.forEach(({ roleId, player }) => { if (player.socketId) io.to(player.socketId).emit('roleSwapped', player); });
-      io.emit('swapComplete', { message: `${result.swapped[0].player.name} and ${result.swapped[1].player.name} swapped roles!` });
-    } else if (!result.accepted) {
-      const from = players[result.fromRoleId];
-      if (from && from.socketId) io.to(from.socketId).emit('swapDeclined', { byName: players[toRoleId].name });
+  socket.on('eject', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || player.isDead || player.isSpectator) return;
+
+    if (player.hiding) {
+      game.shelter.unhide(player);
+      game.sendPlayerUpdates();
+      io.to(roomCode).emit('playerUnhidden', { playerId: socket.id });
+      socket.emit('ejectSuccess', { message: 'You jumped out!' });
     }
   });
 
-  socket.on('respondRequest', (requestId, accept) => {
-    const fromRoleId = socketToRole[socket.id];
-    if (!fromRoleId) return;
-    const result = requestManager.respondRequest(requestId, fromRoleId, accept);
-    if (!result.ok) return socket.emit('actionError', result.error);
+  socket.on('triggerDisaster', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game || game.hostId !== socket.id) return;
+
+    if (game.quizManager.quizActive) {
+      game.disasterManager.pause();
+      socket.emit('disasterPaused', { message: 'Disaster paused for quiz.' });
+    }
+
+    game.disasterManager.startEvent(io);
+  });
+
+  socket.on('forceTrigger', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game || game.hostId !== socket.id) return;
+
+    game.disasterManager.cancel();
+    game.disasterManager.startEvent(io);
+  });
+
+  socket.on('throwQuiz', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game || game.hostId !== socket.id) return;
+
+    if (game.disasterManager.activeEvent) {
+      game.disasterManager.pause();
+      socket.emit('disasterPaused', { message: 'Disaster paused for quiz.' });
+    }
+
+    game.quizManager.startQuiz(io, game.currentRound);
+  });
+
+  socket.on('submitQuizAnswer', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    game.quizManager.submitQuizAnswer(socket.id, data.answer, io);
+  });
+
+  socket.on('submitEssay', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    game.quizManager.submitEssay(socket.id, data.text, io);
+  });
+
+  socket.on('voteEssay', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    game.quizManager.voteEssay(socket.id, data.essayId, io);
+  });
+
+  socket.on('quizComplete', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game || game.hostId !== socket.id) return;
+
+    if (game.disasterManager.paused) {
+      game.disasterManager.resume(io);
+      socket.emit('disasterResumed', { message: 'Disaster resumed.' });
+    }
+  });
+
+  socket.on('essayComplete', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game || game.hostId !== socket.id) return;
+
+    if (game.disasterManager.paused) {
+      game.disasterManager.resume(io);
+      socket.emit('disasterResumed', { message: 'Disaster resumed.' });
+    }
+  });
+
+  socket.on('medicHeal', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const result = game.roleManager.heal(socket.id, data.targetId, io);
+    if (result.success) {
+      game.sendPlayerUpdates();
+    } else {
+      socket.emit('error', { message: result.message });
+    }
+  });
+
+  socket.on('caretakerRestore', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    if (game.currentEvent) {
+      socket.emit('error', { message: 'Cannot restore during an event.' });
+      return;
+    }
+
+    const result = game.shelter.applyCaretakerRepair(data.furnitureId);
+    if (result) {
+      game.sendGameState();
+      io.to(roomCode).emit('furnitureRestored', {
+        furnitureId: data.furnitureId,
+        restoredBy: socket.id
+      });
+    } else {
+      socket.emit('error', { message: 'Failed to restore furniture.' });
+    }
+  });
+
+  socket.on('engineerConstruct', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const player = game.players[socket.id];
+    if (!player || !player.role || player.role.id !== 'eng1') {
+      socket.emit('error', { message: 'Only Engineers can initialize construction.' });
+      return;
+    }
+
+    if (game.currentEvent) {
+      socket.emit('error', { message: 'Cannot construct during an event.' });
+      return;
+    }
+
+    if (player.rolePowerUsed) {
+      socket.emit('error', { message: 'Construction already initialized.' });
+      return;
+    }
+
+    const result = game.shelter.startConstruction(socket.id, io);
+    if (result.success) {
+      player.rolePowerUsed = true;
+      game.sendGameState();
+      io.to(roomCode).emit('constructionStarted', {
+        amount: result.amount,
+        startedBy: socket.id
+      });
+    } else {
+      socket.emit('error', { message: 'Failed to start construction.' });
+    }
+  });
+
+  socket.on('sendRequest', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const result = game.requestManager.createRequest(
+      socket.id,
+      data.targetId,
+      data.type,
+      data.payload,
+      io
+    );
+
+    if (!result.success) {
+      socket.emit('error', { message: result.reason });
+    }
+  });
+
+  socket.on('respondToRequest', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    game.requestManager.respondToRequest(data.requestId, data.accepted, socket.id, io);
+  });
+
+  socket.on('acceptFoodFromInventory', (data) => {
+    const roomCode = socket.gameRoom;
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    const result = game.requestManager.acceptFoodFromInventory(
+      data.requestId,
+      socket.id,
+      data.selectedItemId,
+      io
+    );
+
+    if (result.success) {
+      game.sendPlayerUpdates();
+    } else {
+      socket.emit('error', { message: result.reason });
+    }
   });
 
   socket.on('disconnect', () => {
-    const roleId = socketToRole[socket.id];
-    delete socketToRole[socket.id];
-    if (roleId && players[roleId]) {
-      roleManager.cancelSwapFor(roleId);
-      requestManager.cancelRequestsFrom(roleId);
-      shelterManager.unhiding(roleId);
-      players[roleId].socketId = null;
-      if (gameStarted) {
-        players[roleId].connected = false;
-        players[roleId].moving = { left: false, right: false };
-      } else {
-        const roleIndex = roles.findIndex(r => r.id === roleId);
-        if (roleIndex !== -1) roles[roleIndex].takenBy = null;
-        delete players[roleId];
-        io.emit('updateRoles', roles);
+    console.log('Player disconnected:', socket.id);
+    const roomCode = socket.gameRoom;
+    if (!roomCode) return;
+
+    const game = games.get(roomCode);
+    if (!game) return;
+
+    if (game.hostId === socket.id) {
+      io.to(roomCode).emit('hostDisconnected', { message: 'Host has disconnected. Game over.' });
+      game.endGame('Host disconnected');
+      games.delete(roomCode);
+    } else {
+      const player = game.players[socket.id];
+      if (player) {
+        io.to(roomCode).emit('playerDisconnected', {
+          playerId: socket.id,
+          playerName: player.name
+        });
       }
-      io.emit('updatePlayers', players);
     }
-    console.log('Disconnected:', socket.id);
   });
 });
 
-setInterval(() => {
-  if (!gameStarted) return;
-  let changed = false;
-  for (const rid in players) {
-    const p = players[rid];
-    if (!p.connected || !p.isAlive) continue;
-
-    if (p.hidingIn) continue;
-
-    if (p.moving.left) { p.x = Math.max(PLAYER_MIN_X, p.x - MOVE_SPEED); changed = true; }
-    if (p.moving.right) { p.x = Math.min(PLAYER_MAX_X, p.x + MOVE_SPEED); changed = true; }
-
-    if (p.vy !== 0 || p.offsetY > (p.floor === 2 ? 200 : 0)) {
-      p.offsetY += p.vy;
-      p.vy -= GRAVITY;
-      const groundY = p.floor === 2 ? 200 : 0;
-      if (p.offsetY <= groundY) { p.offsetY = groundY; p.vy = 0; }
-      changed = true;
-    }
-
-    if (!gameOver && p.isAlive) {
-      p.hunger = Math.max(0, p.hunger - 0.02);
-      if (p.hunger <= 0) {
-        p.health = Math.max(0, p.health - 0.1);
-        if (p.health <= 0) { p.isAlive = false; itemManager.dropItems(rid); }
-      }
-    }
-  }
-  if (changed) io.emit('updatePlayers', players);
-}, TICK_MS);
-
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => { console.log(`DRRR Safe House server running on port ${PORT}`); });
+server.listen(PORT, () => {
+  console.log(`DRRR Safe House Server running on port ${PORT}`);
+});
