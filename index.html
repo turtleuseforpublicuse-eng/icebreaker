@@ -304,6 +304,7 @@
     <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
       <button class="btn btn-red btn-sm" id="btnMedicRequest" onclick="doRequestMedic()">Request Medic (2 left)</button>
       <button class="btn btn-green btn-sm" onclick="doRequestFood()">Request Food</button>
+      <button class="btn btn-green btn-sm" id="btnScavengerShare" style="display:none;" onclick="doScavengerShare()">Scavenger Share</button>
       <button class="btn btn-blue btn-sm" onclick="doRequestEngineer()">Alert Engineer</button>
     </div>
   </div>
@@ -683,11 +684,19 @@ socket.on('medicSelectShow', (data) => {
 socket.on('scavengerSelectShow', (data) => {
   const container = document.getElementById('scavengerSelectOptions');
   container.innerHTML = '';
+  const mode = data.mode || 'food';
   data.scavengers.forEach(s => {
     const btn = document.createElement('div');
     btn.className = 'quiz-opt';
     btn.innerHTML = s.roleIcon + ' ' + s.name;
-    btn.onclick = () => { socket.emit('requestFoodTarget', s.roleId); document.getElementById('scavengerSelectPanel').classList.remove('visible'); };
+    btn.onclick = () => {
+      if (mode === 'scavenger_share') {
+        socket.emit('requestScavengerShareTarget', s.roleId);
+      } else {
+        socket.emit('requestFoodTarget', s.roleId);
+      }
+      document.getElementById('scavengerSelectPanel').classList.remove('visible');
+    };
     container.appendChild(btn);
   });
   document.getElementById('scavengerSelectPanel').classList.add('visible');
@@ -718,6 +727,16 @@ socket.on('updatePlayers', (data) => {
     updateActionPanel();
     updateScavengePanel();
     updateHideButton();
+    const shareBtn = document.getElementById('btnScavengerShare');
+    if (shareBtn) {
+      const me = data[myRoleId];
+      if (me && me.roleName === 'Scavenger') {
+        shareBtn.style.display = 'inline-block';
+        shareBtn.disabled = !me.isAlive;
+      } else {
+        shareBtn.style.display = 'none';
+      }
+    }
     document.getElementById('controllerFloor').innerText = 'Floor: ' + (data[myRoleId].floor || 1);
   }
 });
@@ -1046,7 +1065,7 @@ socket.on('requestReceived', (data) => {
   itemSelect.style.display = 'none';
   actionBtns.style.display = 'block';
 
-  if (data.type === 'food' && myRoleId && playersData[myRoleId] && playersData[myRoleId].roleName === 'Scavenger') {
+  if ((data.type === 'food' || data.type === 'scavenger_food') && myRoleId && playersData[myRoleId] && playersData[myRoleId].roleName === 'Scavenger') {
     const me = playersData[myRoleId];
     const foodItems = (me.inventory || []).filter(i => i.id === 'food' || i.id === 'water');
     if (foodItems.length > 0) {
@@ -1078,7 +1097,7 @@ socket.on('requestReceived', (data) => {
 });
 function respondRequestModal(accept) {
   if (pendingRequestFrom) {
-    if (accept && pendingRequestFrom.type === 'food' && myRoleId && playersData[myRoleId] && playersData[myRoleId].roleName === 'Scavenger') {
+    if (accept && (pendingRequestFrom.type === 'food' || pendingRequestFrom.type === 'scavenger_food') && myRoleId && playersData[myRoleId] && playersData[myRoleId].roleName === 'Scavenger') {
       const me = playersData[myRoleId];
       const foodItems = (me.inventory || []).filter(i => i.id === 'food' || i.id === 'water');
       if (foodItems.length > 0) {
@@ -1260,6 +1279,7 @@ function doRequestMedic() {
 }
 
 function doRequestFood() { socket.emit('requestFood'); }
+function doScavengerShare() { socket.emit('requestScavengerShare'); }
 function doRequestEngineer() { socket.emit('requestEngineer'); }
 
 function updateHideButton() {
@@ -1404,6 +1424,23 @@ function drawHouse() {
   ctx.lineTo(HOUSE.rightX, HOUSE.roofY + 100);
   ctx.lineTo(HOUSE.rightX, HOUSE.groundY);
   ctx.stroke();
+
+  // Roof holes based on shelter damage
+  const holeCount = Math.floor((1 - shelterState.shelterIntegrity / 100) * 6);
+  for (let i = 0; i < holeCount; i++) {
+    const t = (i + 0.3) / 7;
+    const hx = HOUSE.leftX + t * (HOUSE.rightX - HOUSE.leftX);
+    const roofPeak = HOUSE.roofY + 100 - Math.abs(hx - 400) * (100 / 350);
+    const hw = 6 + (1 - shelterState.shelterIntegrity / 100) * 10;
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.ellipse(hx, roofPeak - 4, hw, 4 + (1 - shelterState.shelterIntegrity / 100) * 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(hx, roofPeak - 2, hw - 2, 3, 0, 0, Math.PI);
+    ctx.fill();
+  }
 
   ctx.strokeStyle = 'rgba(201,166,107,0.5)';
   ctx.lineWidth = 3;

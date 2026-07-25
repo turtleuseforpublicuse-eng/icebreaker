@@ -63,6 +63,7 @@ const disasterManager = new DisasterManager({
     io.emit('eventActiveUpdate', { eventActive: true });
   },
   onDisasterEnd: (ev, scores) => {
+    try {
     eventActive = false;
     io.emit('eventActiveUpdate', { eventActive: false });
     currentRound++;
@@ -83,10 +84,15 @@ const disasterManager = new DisasterManager({
     _checkAllDead();
     if (quizCooldownTimer) clearTimeout(quizCooldownTimer);
     quizCooldownTimer = setTimeout(() => {
-      if (!gameOver && gameStarted) {
-        quizManager.throwQuizOrEssay(currentRound);
+      try {
+        if (!gameOver && gameStarted) {
+          quizManager.throwQuizOrEssay(currentRound);
+        }
+      } catch (e) {
+        console.error('Auto-quiz error:', e);
       }
     }, 3000);
+  } catch (e) { console.error('onDisasterEnd error:', e); }
   }
 });
 
@@ -505,6 +511,23 @@ io.on('connection', (socket) => {
     const scavengers = Object.entries(players).filter(([rid, p]) => p.roleName === 'Scavenger' && p.isAlive && p.connected && rid !== fromRoleId);
     if (scavengers.length === 0) return socket.emit('actionError', 'No Scavenger available!');
     socket.emit('scavengerSelectShow', { scavengers: scavengers.map(([rid, p]) => ({ roleId: rid, name: p.name, roleIcon: p.roleIcon })) });
+  });
+
+  socket.on('requestScavengerShare', () => {
+    const fromRoleId = socketToRole[socket.id];
+    if (!fromRoleId) return;
+    const p = players[fromRoleId];
+    if (!p || p.roleName !== 'Scavenger') return socket.emit('actionError', 'Only Scavengers can use this.');
+    const others = Object.entries(players).filter(([rid, p2]) => p2.roleName === 'Scavenger' && p2.isAlive && p2.connected && rid !== fromRoleId);
+    if (others.length === 0) return socket.emit('actionError', 'No other Scavenger available!');
+    socket.emit('scavengerSelectShow', { scavengers: others.map(([rid, p2]) => ({ roleId: rid, name: p2.name, roleIcon: p2.roleIcon })), mode: 'scavenger_share' });
+  });
+
+  socket.on('requestScavengerShareTarget', (targetRoleId) => {
+    const fromRoleId = socketToRole[socket.id];
+    if (!fromRoleId) return;
+    const result = requestManager.createRequest('scavenger_food', fromRoleId, targetRoleId);
+    if (!result.ok) return socket.emit('actionError', result.error);
   });
 
   socket.on('requestFoodTarget', (targetRoleId) => {
