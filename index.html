@@ -24,7 +24,32 @@
   textarea { width: 100%; max-width: 300px; resize: none; font-family: 'Poppins', sans-serif; }
   input[type="color"] { padding: 0; height: 50px; width: 50px; border-radius: 50%; cursor: pointer; border: 2px solid white; }
   #setup, #hostView, #lobbyStep1, #lobbyStep2, #clientController, #clientWaiting { display: none; padding: 20px; box-sizing: border-box; }
-  #setup { display: block; margin-top: 10vh; }
+  #setup {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; margin-top: 0; position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #16213e 75%, #1a1a2e 100%);
+    background-size: 400% 400%;
+    animation: setupBgMove 10s ease-in-out infinite;
+  }
+  @keyframes setupBgMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .setup-particle {
+    position: absolute; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(79,172,254,0.15), transparent);
+  }
+  .setup-particle:nth-child(1) { width: 200px; height: 200px; top: 10%; left: -5%; animation: floatParticle 12s ease-in-out infinite; }
+  .setup-particle:nth-child(2) { width: 150px; height: 150px; top: 60%; right: -3%; animation: floatParticle 15s ease-in-out infinite reverse; }
+  .setup-particle:nth-child(3) { width: 100px; height: 100px; bottom: 15%; left: 20%; animation: floatParticle 10s ease-in-out infinite 2s; }
+  .setup-particle:nth-child(4) { width: 180px; height: 180px; top: 30%; right: 10%; animation: floatParticle 14s ease-in-out infinite 1s; }
+  @keyframes floatParticle {
+    0%,100% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(30px, -20px) scale(1.1); }
+    50% { transform: translate(-20px, 30px) scale(0.9); }
+    75% { transform: translate(20px, 20px) scale(1.05); }
+  }
   .host-layout { display: flex; justify-content: center; align-items: flex-start; gap: 20px; max-width: 1400px; margin: 0 auto; flex-wrap: wrap; }
   .canvas-wrap { position: relative; display: inline-block; }
   canvas { background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; display: block; }
@@ -114,6 +139,15 @@
   .construction-bar { height: 12px; background: #051022; border-radius: 6px; overflow: hidden; }
   .construction-fill { height: 100%; background: linear-gradient(90deg, #f7971e, #ffd200); border-radius: 6px; transition: width 0.3s; }
   .request-badge { background: #ff0844; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; }
+  .quiz-top-timer { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10004; background: rgba(0,0,0,0.75); border: 2px solid #ffd200; border-radius: 16px; padding: 8px 24px; display: none; align-items: center; gap: 10px; box-shadow: 0 0 20px rgba(255,210,0,0.3); animation: timerBounce 0.5s ease-in-out; }
+  .quiz-top-timer.visible { display: flex; }
+  .quiz-top-timer .timer-icon { font-size: 24px; animation: timerPulse 1s infinite; }
+  .quiz-top-timer .timer-text { font-size: 20px; font-weight: bold; color: #ffd200; }
+  .quiz-top-timer .timer-sec { font-size: 28px; font-weight: 800; color: #fff; min-width: 30px; text-align: center; }
+  .quiz-top-timer.urgent .timer-sec { color: #ff0844; animation: timerUrgent 0.3s infinite alternate; }
+  @keyframes timerBounce { 0% { transform: translateX(-50%) scale(0.5); opacity: 0; } 60% { transform: translateX(-50%) scale(1.1); } 100% { transform: translateX(-50%) scale(1); opacity: 1; } }
+  @keyframes timerPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+  @keyframes timerUrgent { from { transform: scale(1); } to { transform: scale(1.2); text-shadow: 0 0 15px #ff0844; } }
   .winner-overlay { position: fixed; inset: 0; z-index: 10003; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; flex-direction: column; }
   .winner-overlay.visible { display: flex; }
   .winner-text { font-size: 48px; font-weight: 800; color: #ffd200; text-shadow: 0 0 30px rgba(255,210,0,0.5); margin-bottom: 20px; }
@@ -124,10 +158,16 @@
 <body>
 
 <div id="setup">
-  <h1 style="font-size: 3em; margin-bottom: 0;">DRRR Survival</h1>
-  <p style="color: #4facfe; margin-bottom: 40px;">The Safe House Icebreaker</p>
-  <button class="btn btn-blue" onclick="setHost()">Start as Host (Projector)</button>
-  <button class="btn btn-green" onclick="setPlayer()">Join as Player (Phone)</button>
+  <div class="setup-particle"></div>
+  <div class="setup-particle"></div>
+  <div class="setup-particle"></div>
+  <div class="setup-particle"></div>
+  <div style="position:relative; z-index:1;">
+    <h1 style="font-size: 3em; margin-bottom: 0;">DRRR Survival</h1>
+    <p style="color: #4facfe; margin-bottom: 40px;">The Safe House Icebreaker</p>
+    <button class="btn btn-blue" onclick="setHost()">Start as Host (Projector)</button>
+    <button class="btn btn-green" onclick="setPlayer()">Join as Player (Phone)</button>
+  </div>
 </div>
 
 <div id="hostView">
@@ -153,7 +193,7 @@
           <button class="btn btn-yellow btn-sm" onclick="hostThrowEssay()">Throw Essay</button>
           <button class="btn btn-red btn-sm" onclick="hostTriggerDisaster()">Trigger Disaster</button>
         </div>
-        <p class="auto-disaster-note">Disasters strike automatically every 1-2 minutes. Lookouts can detect them early!</p>
+        <p class="auto-disaster-note">Disasters strike automatically every 40-60 seconds. Lookouts can detect them early!</p>
       </div>
       <div class="sidebar">
         <h3>Survivors</h3>
@@ -318,6 +358,12 @@
   </div>
 </div>
 
+<div class="quiz-top-timer" id="quizTopTimer">
+  <span class="timer-icon">⏳</span>
+  <span class="timer-text">Quiz</span>
+  <span class="timer-sec" id="quizTopTimerSec">15</span>
+</div>
+
 <div class="quiz-panel" id="quizPanel">
   <div class="quiz-box">
     <h3 id="quizTitle">Quiz Time!</h3>
@@ -408,6 +454,36 @@ let furnitureData = {};
 let shelterState = { shelterIntegrity: 100, furniture: {} };
 let myInventory = [];
 let activeDisasters = ['earthquake','typhoon','flood','landslide'];
+let clouds = [];
+for (let i = 0; i < 4; i++) {
+  clouds.push({
+    x: Math.random() * 900 - 50,
+    y: 20 + Math.random() * 45,
+    w: 50 + Math.random() * 70,
+    speed: 0.12 + Math.random() * 0.2,
+    opacity: 0.2 + Math.random() * 0.25
+  });
+}
+
+function drawClouds() {
+  clouds.forEach(c => {
+    c.x += c.speed;
+    if (c.x > 850) c.x = -c.w;
+    ctx.fillStyle = 'rgba(200, 220, 255, ' + c.opacity + ')';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, c.w * 0.3, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(c.x - c.w * 0.2, c.y + 4, c.w * 0.25, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(c.x + c.w * 0.2, c.y + 3, c.w * 0.25, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 5, c.w * 0.25, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
 let eventActive = false;
 let nearbyFurniture = null;
 let pendingMedicTarget = null;
@@ -1039,10 +1115,16 @@ socket.on('quizStarted', (data) => {
   responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'quiz' };
   let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('quizTimer').innerText = 'Time: ' + timeLeft + 's';
+  const topTimer = document.getElementById('quizTopTimer');
+  const topSec = document.getElementById('quizTopTimerSec');
+  if (topTimer) topTimer.classList.add('visible');
+  if (topSec) topSec.innerText = timeLeft;
   const interval = setInterval(() => {
     timeLeft--;
     document.getElementById('quizTimer').innerText = 'Time: ' + timeLeft + 's';
-    if (timeLeft <= 0) clearInterval(interval);
+    if (topSec) topSec.innerText = timeLeft;
+    if (topTimer && timeLeft <= 5) topTimer.classList.add('urgent');
+    if (timeLeft <= 0) { clearInterval(interval); if (topTimer) { topTimer.classList.remove('visible'); topTimer.classList.remove('urgent'); } }
   }, 1000);
 });
 socket.on('quizResponseCount', (data) => {
@@ -1053,6 +1135,8 @@ socket.on('quizResponseCount', (data) => {
 });
 socket.on('quizResults', (data) => {
   document.getElementById('quizPanel').classList.remove('visible');
+  const topTimer = document.getElementById('quizTopTimer');
+  if (topTimer) { topTimer.classList.remove('visible'); topTimer.classList.remove('urgent'); }
   responseCounter = null;
   document.getElementById('quizResultsText').innerText = 'Correct: ' + data.question.split('?')[0] + '?';
   const winnersDiv = document.getElementById('quizWinners');
@@ -1061,7 +1145,7 @@ socket.on('quizResults', (data) => {
     winnersDiv.innerHTML = '<p style="color:#aaa;">No one got it right!</p>';
   } else {
     data.winners.forEach((w) => {
-      winnersDiv.innerHTML += '<p style="color:#ffd200;">#' + w.place + ' ' + w.roleIcon + ' ' + w.name + ' (' + (w.timeTaken/1000).toFixed(1) + 's) +' + w.prize.health + 'HP +' + w.prize.food + 'Food</p>';
+      winnersDiv.innerHTML += '<p style="color:#ffd200;">#' + w.place + ' ' + w.roleIcon + ' ' + w.name + ' (' + (w.timeTaken/1000).toFixed(1) + 's) +' + w.points + 'pts</p>';
     });
   }
   document.getElementById('quizResultsPanel').classList.add('visible');
@@ -1478,6 +1562,7 @@ function gameLoop() {
   if (activeEvent && activeEvent.id === 'earthquake') {
     ctx.translate((Math.random() - 0.5) * shakeAmount, (Math.random() - 0.5) * shakeAmount);
   }
+  drawClouds();
   drawHouse();
   const sortedPlayers = Object.values(playersData).sort((a, b) => (a.floor || 1) - (b.floor || 1));
   for (const p of sortedPlayers) drawStickman(p);
