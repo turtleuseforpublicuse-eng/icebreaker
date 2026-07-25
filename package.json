@@ -1,7 +1,7 @@
 {
   "name": "drrr-safehouse",
   "version": "3.0.0",
-  "description": "DRRR Safe House v3.0 - multiplayer disaster survival icebreaker with shelter, furniture, items, quiz, scoring, day/night cycle, and visual degradation",
+  "description": "DRRR Safe House v3.0 - multiplayer disaster survival icebreaker with scoring, day/night, auto-repair, and enhanced quiz",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

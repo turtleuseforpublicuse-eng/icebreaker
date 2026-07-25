@@ -27,7 +27,7 @@
   #setup { display: block; margin-top: 10vh; }
   .host-layout { display: flex; justify-content: center; align-items: flex-start; gap: 20px; max-width: 1400px; margin: 0 auto; flex-wrap: wrap; }
   .canvas-wrap { position: relative; display: inline-block; }
-  canvas#gameCanvas { border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; display: block; }
+  canvas { background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; display: block; }
   .sidebar { background: #16213e; padding: 20px; border-radius: 10px; width: 260px; text-align: left; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 600px; overflow-y: auto; }
   .player-card { background: #0f3460; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 5px solid white; transition: opacity 0.3s; }
   .player-card.dead { opacity: 0.5; filter: grayscale(100%); border-left-color: red; }
@@ -37,7 +37,6 @@
   .stat-blocks { font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; color: #cfe8ff; margin-top: 2px; }
   .room-code-display { font-size: 32px; font-weight: bold; color: #4facfe; letter-spacing: 4px; background: #0f3460; padding: 10px; border-radius: 8px; margin-bottom: 15px; text-align: center;}
   .round-display { font-size: 18px; color: #43e97b; font-weight: bold; margin: 8px 0; }
-  .time-cycle-display { font-size: 16px; color: #ffd200; font-weight: bold; margin: 4px 0; background: #0f3460; padding: 8px; border-radius: 6px; }
   .auto-disaster-note { color: #aaa; font-size: 13px; margin-top: 10px; }
   .roles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; max-width: 600px; margin: 20px auto; }
   .role-card { background: #0f3460; padding: 15px 5px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: 0.2s; font-size: 14px; position: relative; }
@@ -85,12 +84,11 @@
   .toast.visible { display: block; animation: fadeIn 0.3s; }
   @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
   #clientController { touch-action: manipulation; }
+
   .shelter-panel { background: #0f3460; border-radius: 8px; padding: 10px; margin: 8px auto; max-width: 340px; text-align: left; }
   .shelter-panel h4 { margin: 0 0 6px; font-size: 14px; }
   .shelter-bar { height: 16px; background: #051022; border-radius: 8px; overflow: hidden; margin: 4px 0; }
   .shelter-fill { height: 100%; background: linear-gradient(90deg, #ff0844, #43e97b); border-radius: 8px; transition: width 0.3s; }
-  .deterioration-warning { display: none; background: linear-gradient(135deg, #ff0844, #ffb199); color: white; border-radius: 8px; padding: 10px; margin: 8px auto; max-width: 340px; font-weight: bold; animation: pulse 1s infinite; }
-  .deterioration-warning.visible { display: block; }
   .inventory-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
   .inv-item { background: #0f3460; border: 1px solid #4facfe; border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
   .inv-item:hover { background: #1a4f70; }
@@ -121,12 +119,6 @@
   .winner-text { font-size: 48px; font-weight: 800; color: #ffd200; text-shadow: 0 0 30px rgba(255,210,0,0.5); margin-bottom: 20px; }
   .scavenge-panel { display: none; background: #0f3460; border: 2px solid #43e97b; border-radius: 10px; padding: 10px; margin: 8px auto; max-width: 340px; }
   .scavenge-panel.visible { display: block; }
-  .scoreboard { background: #0f3460; border-radius: 8px; padding: 10px; margin: 8px auto; max-width: 340px; text-align: left; }
-  .scoreboard h4 { margin: 0 0 6px; font-size: 14px; color: #ffd200; }
-  .score-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #16213e; }
-  .score-row .rank { color: #ffd200; font-weight: bold; width: 20px; }
-  .score-row .sname { flex: 1; }
-  .score-row .pts { color: #43e97b; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -143,10 +135,6 @@
     <p style="margin: 0; color: #888; text-transform: uppercase; font-size: 12px;">Join Code</p>
     <div class="room-code-display" id="hostRoomCode">----</div>
     <div class="round-display" id="hostRoundDisplay" style="display:none;">Round 1 / 10</div>
-    <div class="time-cycle-display" id="hostTimeCycle" style="display:none;">
-      <span id="cycleIcon">☀️</span> <span id="cycleLabel">DAY</span> — <span id="cycleTimer">30s</span>
-      <span id="eventStatus" style="color:#ff6b6b;"></span>
-    </div>
   </div>
   <div id="hostLobby">
     <h2>Waiting Room</h2>
@@ -165,23 +153,19 @@
           <button class="btn btn-yellow btn-sm" onclick="hostThrowEssay()">Throw Essay</button>
           <button class="btn btn-red btn-sm" onclick="hostTriggerDisaster()">Trigger Disaster</button>
         </div>
-        <p class="auto-disaster-note">Disasters strike automatically. Quiz triggers every event!</p>
+        <p class="auto-disaster-note">Disasters strike automatically every 1-2 minutes. Lookouts can detect them early!</p>
       </div>
       <div class="sidebar">
         <h3>Survivors</h3>
+        <div id="dayNightDisplay" style="font-size:14px; color:#4facfe; margin-bottom:8px; text-align:center;">☀️ Day</div>
         <div id="sidebarPlayers"></div>
         <div class="shelter-panel" id="shelterPanel">
           <h4>Shelter Integrity</h4>
+          <div id="deteriorationBar" style="display:none; background:#ff0844; color:white; padding:4px 8px; border-radius:4px; font-size:12px; margin-bottom:4px; text-align:center;">⚠️ Shelter critical!</div>
           <div class="shelter-bar"><div class="shelter-fill" id="shelterFill" style="width:100%"></div></div>
           <div class="stat-blocks" id="shelterBlocks">██████████ 100%</div>
         </div>
-        <div class="deterioration-warning" id="deteriorationWarning">
-          ⚠️ SHELTER DETERIORATING — LOW INTEGRITY!
-        </div>
-        <div class="scoreboard" id="hostScoreboard">
-          <h4>🏆 Event Scores</h4>
-          <div id="hostScoreList"></div>
-        </div>
+        <div id="scoreDisplay" style="margin-top:8px; font-size:12px; color:#ffd200;"></div>
         <button class="btn btn-gray" style="width:100%; margin-top: 10px; font-size: 14px; padding: 10px;" onclick="resetGame()">Reset Game</button>
       </div>
     </div>
@@ -226,10 +210,6 @@
 <div id="clientController">
   <h2 id="controllerName">Survivor</h2>
   <h3 id="controllerRole" style="color: #4facfe; margin-top: -10px;"></h3>
-  <div id="controllerTimeCycle" style="font-size:13px; color:#ffd200; margin:4px 0; display:none;">
-    <span id="ctrlCycleIcon">☀️</span> <span id="ctrlCycleLabel">DAY</span> — <span id="ctrlCycleTimer">30s</span>
-    <span id="ctrlEventStatus" style="color:#ff6b6b;"></span>
-  </div>
   <div class="controls" id="controlPad">
     <button class="ctrl-btn" id="btnLeft" aria-label="Move left">
       <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
@@ -255,11 +235,8 @@
       <div class="bar-track"><div class="bar-fill" id="controllerHungerBar" style="width:100%; background:#43e97b;"></div></div>
       <div class="stat-blocks" id="controllerHungerBlocks">██████████ 100</div>
     </div>
-    <div class="stat-row">
-      <div class="stat-label"><span>Points</span><span id="controllerPointsNum">0</span></div>
-    </div>
   </div>
-  <p id="controllerDead" style="color:#ffb199; font-weight:bold; display:none;">Eliminated — Spectating</p>
+  <p id="controllerDead" style="color:#ffb199; font-weight:bold; display:none;">Eliminated</p>
   <div id="controllerFloor" style="font-size:12px; color:#aaa; margin:4px 0;">Floor: 1</div>
 
   <div class="lookout-detect-panel" id="lookoutDetectPanel">
@@ -286,7 +263,7 @@
   <div id="requestPanel" style="margin: 8px auto; max-width: 340px;">
     <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
       <button class="btn btn-red btn-sm" id="btnMedicRequest" onclick="doRequestMedic()">Request Medic (2 left)</button>
-      <button class="btn btn-green btn-sm" id="btnFoodRequest" onclick="doRequestFood()">Request Food</button>
+      <button class="btn btn-green btn-sm" onclick="doRequestFood()">Request Food</button>
       <button class="btn btn-blue btn-sm" onclick="doRequestEngineer()">Alert Engineer</button>
     </div>
   </div>
@@ -300,10 +277,6 @@
     <h4>Shelter Integrity</h4>
     <div class="shelter-bar"><div class="shelter-fill" id="controllerShelterFill" style="width:100%"></div></div>
     <div class="stat-blocks" id="controllerShelterBlocks">██████████ 100%</div>
-  </div>
-
-  <div class="deterioration-warning" id="ctrlDeteriorationWarning">
-    ⚠️ SHELTER DETERIORATING!
   </div>
 
   <div style="margin: 8px auto; max-width: 340px;">
@@ -350,7 +323,6 @@
     <h3 id="quizTitle">Quiz Time!</h3>
     <p id="quizQuestion" style="font-size:16px;"></p>
     <div class="quiz-options" id="quizOptions"></div>
-    <p id="quizPenalty" style="font-size:12px; color:#ff6b6b;"></p>
     <p id="quizTimer" style="font-size:13px; color:#aaa;"></p>
   </div>
 </div>
@@ -380,7 +352,7 @@
 
 <div class="quiz-panel" id="quizResultsPanel">
   <div class="quiz-box">
-    <h3 id="quizResultsTitle">Quiz Results</h3>
+    <h3>Quiz Results</h3>
     <p id="quizResultsText"></p>
     <div id="quizWinners"></div>
     <button class="btn btn-gray btn-sm" onclick="closeQuizResults()">OK</button>
@@ -408,7 +380,6 @@
 <div class="winner-overlay" id="winnerOverlay">
   <div class="winner-text" id="winnerText">GAME OVER</div>
   <p id="winnerReason" style="color:#aaa; font-size:18px;"></p>
-  <div id="winnerRankings" style="max-width:400px; width:90%; margin:20px auto;"></div>
   <button class="btn btn-blue" onclick="location.reload()">Play Again</button>
 </div>
 
@@ -442,13 +413,10 @@ let nearbyFurniture = null;
 let pendingMedicTarget = null;
 let pendingFoodTarget = null;
 let responseCounter = null;
-let dayNightState = 'day';
-let cycleTimeRemaining = 30000;
-let shelterIntegrity = 100;
-let playerScores = {};
 let skyDarkness = 0;
-let targetSkyDarkness = 0;
-let isEssayRound = false;
+let isDayTime = true;
+let playerScores = {};
+let hostTotalScores = {};
 
 function formatStatBlocks(value, total = 10) {
   const pct = Math.max(0, Math.min(100, value));
@@ -581,32 +549,23 @@ socket.on('roundUpdate', (data) => {
 
 socket.on('shelterUpdate', (data) => {
   shelterState = data;
-  shelterIntegrity = data.integrity || data.shelterIntegrity || 100;
-  const pct = shelterIntegrity;
+  const pct = data.shelterIntegrity;
   const el1 = document.getElementById('shelterFill');
   const el2 = document.getElementById('shelterBlocks');
   const el3 = document.getElementById('controllerShelterFill');
   const el4 = document.getElementById('controllerShelterBlocks');
+  const deterior = document.getElementById('deteriorationBar');
   if (el1) el1.style.width = pct + '%';
   if (el2) el2.innerText = formatStatBlocks(pct) + '%';
   if (el3) el3.style.width = pct + '%';
   if (el4) el4.innerText = formatStatBlocks(pct) + '%';
-
-  const warnHost = document.getElementById('deteriorationWarning');
-  const warnCtrl = document.getElementById('ctrlDeteriorationWarning');
-  if (pct < 30) {
-    if (warnHost) warnHost.classList.add('visible');
-    if (warnCtrl) warnCtrl.classList.add('visible');
-  } else {
-    if (warnHost) warnHost.classList.remove('visible');
-    if (warnCtrl) warnCtrl.classList.remove('visible');
-  }
+  if (deterior) deterior.style.display = pct < 30 ? 'block' : 'none';
 });
 
 socket.on('furnitureState', (data) => { furnitureData = data; });
 socket.on('furnitureUpdate', (data) => { if (data.furnitureId) furnitureData[data.furnitureId] = data.furniture; });
 
-socket.on('constructionInitialized', (data) => { showToast(data.by + ' initialized construction!'); });
+socket.on('constructionInitialized', (data) => { showToast(data.by + ' initialized construction! Engineers are ready.'); });
 socket.on('constructionStarted', (data) => {
   document.getElementById('constructionPanel').classList.add('visible');
   showToast(data.by + ' started building!');
@@ -628,12 +587,9 @@ socket.on('umbrellaBroken', (data) => { if (data.playerId === myRoleId) showToas
 socket.on('itemReceived', (data) => { if (data.playerId === myRoleId) showToast('Found: ' + data.item.icon + ' ' + data.item.name); });
 
 socket.on('eventActiveUpdate', (data) => { eventActive = data.eventActive; updateHideButton(); updateActionPanel(); });
-socket.on('furnitureRestored', (data) => { showToast(data.message || 'Housekeepers restored furniture!'); });
+socket.on('furnitureRestored', (data) => { showToast(data.message || 'Housekeepers restored ' + data.count + ' furniture!'); });
 socket.on('housekeeperWaiting', (data) => { showToast(data.message); });
-socket.on('quizAnswered', (data) => {
-  if (data.isCorrect) showToast('Correct! +' + (data.points || 10) + ' points');
-  else showToast('Wrong answer! ' + (data.points || -5) + ' points');
-});
+socket.on('quizAnswered', (data) => { showToast(data.isCorrect ? 'Correct!' : 'Wrong answer!'); });
 socket.on('essaySubmitted', () => { showToast('Essay submitted!'); });
 socket.on('voteSubmitted', () => { showToast('Vote cast!'); });
 socket.on('medicSelectShow', (data) => {
@@ -654,71 +610,11 @@ socket.on('scavengerSelectShow', (data) => {
   data.scavengers.forEach(s => {
     const btn = document.createElement('div');
     btn.className = 'quiz-opt';
-    btn.innerHTML = s.roleIcon + ' ' + s.name + (s.hasFood ? '' : ' <span style="color:#ff6b6b;">(No food)</span>');
-    btn.onclick = () => {
-      if (!s.hasFood) { showToast(s.name + ' has no food to share!'); return; }
-      socket.emit('requestFoodTarget', s.roleId);
-      document.getElementById('scavengerSelectPanel').classList.remove('visible');
-    };
+    btn.innerHTML = s.roleIcon + ' ' + s.name;
+    btn.onclick = () => { socket.emit('requestFoodTarget', s.roleId); document.getElementById('scavengerSelectPanel').classList.remove('visible'); };
     container.appendChild(btn);
   });
   document.getElementById('scavengerSelectPanel').classList.add('visible');
-});
-
-socket.on('timeUpdate', (data) => {
-  dayNightState = data.dayNightState || 'day';
-  cycleTimeRemaining = data.timeRemaining || 30000;
-  currentRound = data.currentRound || currentRound;
-  totalRounds = data.maxRounds || totalRounds;
-  eventActive = data.eventActive || false;
-
-  const rd = document.getElementById('hostRoundDisplay');
-  if (rd) { rd.style.display = 'block'; rd.innerText = 'Round ' + currentRound + ' / ' + totalRounds; }
-
-  const tc = document.getElementById('hostTimeCycle');
-  if (tc) {
-    tc.style.display = 'block';
-    document.getElementById('cycleIcon').innerText = dayNightState === 'day' ? '☀️' : '🌙';
-    document.getElementById('cycleLabel').innerText = dayNightState.toUpperCase();
-    document.getElementById('cycleTimer').innerText = Math.ceil(cycleTimeRemaining / 1000) + 's';
-    document.getElementById('eventStatus').innerText = data.eventActive ? ' — ⚠️ ' + (data.eventName || 'EVENT') : '';
-  }
-
-  const ct = document.getElementById('controllerTimeCycle');
-  if (ct) {
-    ct.style.display = 'block';
-    document.getElementById('ctrlCycleIcon').innerText = dayNightState === 'day' ? '☀️' : '🌙';
-    document.getElementById('ctrlCycleLabel').innerText = dayNightState.toUpperCase();
-    document.getElementById('ctrlCycleTimer').innerText = Math.ceil(cycleTimeRemaining / 1000) + 's';
-    document.getElementById('ctrlEventStatus').innerText = data.eventActive ? ' — ⚠️ EVENT' : '';
-  }
-});
-
-socket.on('dayNightChange', (data) => {
-  dayNightState = data.state;
-  showToast(dayNightState === 'night' ? '🌙 Night falls...' : '☀️ Dawn breaks...');
-});
-
-socket.on('eventStart', (ev) => {
-  activeEvent = ev;
-  eventEndsAt = Date.now() + (ev.duration || 5000);
-  particles = [];
-  waterLevel = 0;
-  shakeAmount = 0;
-  targetSkyDarkness = 0.4;
-  document.getElementById('lookoutDetectPanel').classList.remove('visible');
-  hideDisasterWarning();
-});
-socket.on('eventEnd', (data) => {
-  activeEvent = null;
-  particles = [];
-  waterLevel = 0;
-  shakeAmount = 0;
-  targetSkyDarkness = 0;
-  if (data && data.scores) {
-    playerScores = data.scores;
-    updateScoreboard();
-  }
 });
 
 socket.on('hostData', (data) => {
@@ -754,7 +650,6 @@ function updateControllerStats(me) {
   updateStatDisplay('controllerHealth', me.health);
   updateStatDisplay('controllerHunger', me.hunger);
   document.getElementById('controllerDead').style.display = me.isAlive ? 'none' : 'block';
-  document.getElementById('controllerPointsNum').innerText = me.totalPoints || 0;
   const medicBtn = document.getElementById('btnMedicRequest');
   if (medicBtn) {
     const remaining = 2 - (me.medicRequestCount || 0);
@@ -768,34 +663,6 @@ function updateControllerStats(me) {
       medicBtn.style.opacity = '1';
     }
   }
-  const foodBtn = document.getElementById('btnFoodRequest');
-  if (foodBtn && me.roleName === 'Scavenger') {
-    const hasFood = (me.inventory || []).some(i => i.id === 'food' || i.id === 'water');
-    if (!hasFood) {
-      foodBtn.innerText = 'No Food to Share';
-      foodBtn.disabled = true;
-      foodBtn.style.opacity = '0.5';
-    } else {
-      foodBtn.innerText = 'Request Food';
-      foodBtn.disabled = false;
-      foodBtn.style.opacity = '1';
-    }
-  }
-}
-
-function updateScoreboard() {
-  const list = document.getElementById('hostScoreList');
-  if (!list) return;
-  const entries = Object.entries(playerScores)
-    .map(([id, s]) => ({ id, name: s.name, points: s.total || s.points || 0, dead: s.dead }))
-    .sort((a, b) => b.points - a.points);
-  list.innerHTML = '';
-  entries.forEach((e, i) => {
-    const div = document.createElement('div');
-    div.className = 'score-row' + (e.dead ? ' style="opacity:0.5;"' : '');
-    div.innerHTML = '<span class="rank">#' + (i + 1) + '</span><span class="sname">' + e.name + '</span><span class="pts">' + e.points + ' pts</span>';
-    list.appendChild(div);
-  });
 }
 
 function updateLobbyList() {
@@ -814,10 +681,20 @@ function updateSidebar() {
   const sidebar = document.getElementById('sidebarPlayers');
   if (!sidebar) return;
   sidebar.innerHTML = '';
+  const scoreContainer = document.getElementById('scoreDisplay');
+  if (scoreContainer) {
+    let scoreHtml = '';
+    for (const id in hostTotalScores) {
+      const p = playersData[id];
+      const s = hostTotalScores[id];
+      if (p) scoreHtml += '<div style="display:flex;justify-content:space-between;"><span>' + p.roleIcon + ' ' + p.name + '</span><span style="color:#ffd200;">' + ((s.totalPoints || 0) + (s.quizScore || 0)).toFixed(1) + '</span></div>';
+    }
+    scoreContainer.innerHTML = scoreHtml ? '<strong style="color:#ffd200;">Total Scores</strong>' + scoreHtml : '';
+  }
   for (let id in playersData) {
     let p = playersData[id];
     let statusClass = p.isAlive ? '' : 'dead';
-    sidebar.innerHTML += '<div class="player-card ' + statusClass + '" style="border-left-color: ' + p.color + '"><div class="row1"><div><strong>' + p.name + '</strong><br><span style="font-size:12px;color:#aaa;">' + p.roleIcon + ' ' + p.roleName + '</span></div><div style="font-size:11px;font-weight:bold;">' + (p.isAlive ? (p.totalPoints || 0) + ' pts' : 'ELIMINATED') + '</div></div><div class="stat-label" style="margin-top:6px;"><span>Health</span><span>' + Math.round(p.health) + '</span></div><div class="bar-track"><div class="bar-fill" style="width:' + p.health + '%; background:#ff0844;"></div></div><div class="stat-blocks">' + formatStatBlocks(p.health) + '</div><div class="stat-label" style="margin-top:6px;"><span>Food</span><span>' + Math.round(p.hunger) + '</span></div><div class="bar-track"><div class="bar-fill" style="width:' + p.hunger + '%; background:#43e97b;"></div></div><div class="stat-blocks">' + formatStatBlocks(p.hunger) + '</div></div>';
+    sidebar.innerHTML += '<div class="player-card ' + statusClass + '" style="border-left-color: ' + p.color + '"><div class="row1"><div><strong>' + p.name + '</strong><br><span style="font-size:12px;color:#aaa;">' + p.roleIcon + ' ' + p.roleName + '</span></div><div style="font-size:11px;font-weight:bold;">' + (p.isAlive ? '' : 'ELIMINATED') + '</div></div><div class="stat-label" style="margin-top:6px;"><span>Health</span><span>' + Math.round(p.health) + '</span></div><div class="bar-track"><div class="bar-fill" style="width:' + p.health + '%; background:#ff0844;"></div></div><div class="stat-blocks">' + formatStatBlocks(p.health) + '</div><div class="stat-label" style="margin-top:6px;"><span>Food</span><span>' + Math.round(p.hunger) + '</span></div><div class="bar-track"><div class="bar-fill" style="width:' + p.hunger + '%; background:#43e97b;"></div></div><div class="stat-blocks">' + formatStatBlocks(p.hunger) + '</div></div>';
   }
 }
 
@@ -927,18 +804,42 @@ socket.on('gameStarted', () => {
   if (document.getElementById('clientWaiting').style.display === 'block') showOnly('clientController');
 });
 
+socket.on('eventStart', (ev) => {
+  activeEvent = ev;
+  const dur = ev.duration || (ev.durationRange ? (ev.durationRange[0] + Math.random() * (ev.durationRange[1] - ev.durationRange[0])) : 60000);
+  eventEndsAt = Date.now() + dur;
+  particles = [];
+  waterLevel = 0;
+  shakeAmount = 0;
+  document.getElementById('lookoutDetectPanel').classList.remove('visible');
+  hideDisasterWarning();
+});
+socket.on('eventEnd', () => { activeEvent = null; particles = []; waterLevel = 0; shakeAmount = 0; });
+
+socket.on('skyState', (data) => {
+  skyDarkness = data.dark ? 0.7 : 0;
+  if (data.isDay !== undefined) isDayTime = data.isDay;
+  const dayDisplay = document.getElementById('dayNightDisplay');
+  if (dayDisplay) dayDisplay.innerText = isDayTime ? '☀️ Day' : '🌙 Night';
+});
+
+socket.on('eventScores', (data) => {
+  let msg = 'Event scores: ';
+  for (const rid in data.scores) {
+    const p = playersData[rid];
+    if (p) msg += p.name + ': ' + data.scores[rid].toFixed(1) + 'pts ';
+  }
+  showToast(msg, 5000);
+});
+
+socket.on('totalScores', (data) => {
+  hostTotalScores = data;
+  updateSidebar();
+});
+
 socket.on('gameOver', (data) => {
-  document.getElementById('winnerText').innerText = 'GAME OVER';
-  document.getElementById('winnerReason').innerText = data.reason || '';
-  const rankings = data.rankings || [];
-  const container = document.getElementById('winnerRankings');
-  container.innerHTML = '';
-  rankings.forEach(r => {
-    const div = document.createElement('div');
-    div.style.cssText = 'background:#0f3460; padding:10px; border-radius:6px; margin:4px 0; display:flex; justify-content:space-between; align-items:center;';
-    div.innerHTML = '<span><strong>#' + r.rank + '</strong> ' + r.icon + ' ' + r.name + ' (' + r.role + ')</span><span style="color:' + (r.isDead ? '#ff6b6b' : '#43e97b') + '; font-weight:bold;">' + r.totalPoints + ' pts' + (r.isDead ? ' ☠' : '') + '</span>';
-    container.appendChild(div);
-  });
+  document.getElementById('winnerText').innerText = data.winnerIcon + ' ' + data.winnerName + ' WINS!';
+  document.getElementById('winnerReason').innerText = data.reason;
   document.getElementById('winnerOverlay').classList.add('visible');
 });
 
@@ -1122,23 +1023,21 @@ socket.on('requestSent', (data) => showToast('Request sent to ' + data.targetNam
 socket.on('actionError', (msg) => showToast(msg));
 socket.on('actionSuccess', (data) => showToast(data.message));
 
+// Quiz
 socket.on('quizStarted', (data) => {
-  isEssayRound = false;
-  document.getElementById('quizQuestion').innerText = data.question.q || data.question;
+  document.getElementById('quizQuestion').innerText = data.question;
   const optDiv = document.getElementById('quizOptions');
   optDiv.innerHTML = '';
-  const opts = data.question.options || [];
-  opts.forEach((opt, idx) => {
+  data.options.forEach((opt, idx) => {
     const btn = document.createElement('div');
     btn.className = 'quiz-opt';
     btn.innerText = opt;
     btn.onclick = () => { socket.emit('submitQuizAnswer', idx); btn.classList.add('selected'); optDiv.querySelectorAll('.quiz-opt').forEach(b => b.onclick = null); };
     optDiv.appendChild(btn);
   });
-  document.getElementById('quizPenalty').innerText = '⚠ Wrong answer: -5 points | Timeout: 0 points';
   document.getElementById('quizPanel').classList.add('visible');
-  responseCounter = { responded: 0, totalPlayers: data.totalPlayers || 0, type: 'quiz' };
-  let timeLeft = Math.round((data.timeLimitMs || data.timeLimit || 15000) / 1000);
+  responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'quiz' };
+  let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('quizTimer').innerText = 'Time: ' + timeLeft + 's';
   const interval = setInterval(() => {
     timeLeft--;
@@ -1148,28 +1047,19 @@ socket.on('quizStarted', (data) => {
 });
 socket.on('quizResponseCount', (data) => {
   if (responseCounter && responseCounter.type === 'quiz') {
-    responseCounter.responded = data.responded || data.responses;
+    responseCounter.responded = data.responded;
     responseCounter.totalPlayers = data.totalPlayers;
   }
 });
 socket.on('quizResults', (data) => {
   document.getElementById('quizPanel').classList.remove('visible');
   responseCounter = null;
-  document.getElementById('quizResultsTitle').innerText = 'Quiz Results';
-  document.getElementById('quizResultsText').innerText = data.question ? ('Question: ' + (data.question.q || data.question).split('?')[0] + '?') : '';
+  document.getElementById('quizResultsText').innerText = 'Correct: ' + data.question.split('?')[0] + '?';
   const winnersDiv = document.getElementById('quizWinners');
   winnersDiv.innerHTML = '';
-  if (data.correctAnswer !== undefined) {
-    winnersDiv.innerHTML += '<p style="color:#43e97b;">Correct answer: #' + (data.correctAnswer + 1) + '</p>';
-  }
-  if (data.results) {
-    Object.values(data.results).forEach(r => {
-      const color = r.isCorrect ? '#43e97b' : (r.timedOut ? '#aaa' : '#ff6b6b');
-      winnersDiv.innerHTML += '<p style="color:' + color + ';">' + r.icon + ' ' + r.name + ': ' + (r.timedOut ? 'Timed out' : (r.isCorrect ? 'Correct' : 'Wrong')) + ' (' + (r.points >= 0 ? '+' : '') + r.points + ' pts) Total: ' + r.totalPoints + '</p>';
-    });
-  }
-  if (data.winners && data.winners.length > 0) {
-    winnersDiv.innerHTML += '<hr style="border-color:#333;">';
+  if (data.winners.length === 0) {
+    winnersDiv.innerHTML = '<p style="color:#aaa;">No one got it right!</p>';
+  } else {
     data.winners.forEach((w) => {
       winnersDiv.innerHTML += '<p style="color:#ffd200;">#' + w.place + ' ' + w.roleIcon + ' ' + w.name + ' (' + (w.timeTaken/1000).toFixed(1) + 's) +' + w.prize.health + 'HP +' + w.prize.food + 'Food</p>';
     });
@@ -1179,14 +1069,14 @@ socket.on('quizResults', (data) => {
 function closeQuizResults() { document.getElementById('quizResultsPanel').classList.remove('visible'); }
 function hostThrowQuiz() { socket.emit('throwQuiz'); }
 
+// Essay
 socket.on('essayStarted', (data) => {
-  isEssayRound = true;
-  document.getElementById('essayQuestion').innerText = (data.question.q || data.question) + ' (Max ' + (data.question.maxChars || data.maxChars || 50) + ' chars)';
+  document.getElementById('essayQuestion').innerText = data.question + ' (Max ' + data.maxChars + ' chars)';
   document.getElementById('essayInput').value = '';
-  document.getElementById('essayInput').maxLength = data.question.maxChars || data.maxChars || 50;
+  document.getElementById('essayInput').maxLength = data.maxChars;
   document.getElementById('essayPanel').classList.add('visible');
-  responseCounter = { responded: 0, totalPlayers: data.totalPlayers || 0, type: 'essay' };
-  let timeLeft = Math.round((data.timeLimitMs || data.timeLimit || 60000) / 1000);
+  responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'essay' };
+  let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('essayTimer').innerText = 'Time: ' + timeLeft + 's';
   const interval = setInterval(() => {
     timeLeft--;
@@ -1196,7 +1086,7 @@ socket.on('essayStarted', (data) => {
 });
 socket.on('essayResponseCount', (data) => {
   if (responseCounter && responseCounter.type === 'essay') {
-    responseCounter.responded = data.responded || data.responses;
+    responseCounter.responded = data.responded;
     responseCounter.totalPlayers = data.totalPlayers;
   }
 });
@@ -1208,21 +1098,19 @@ function submitEssay() {
 }
 socket.on('essayVotingStarted', (data) => {
   document.getElementById('essayPanel').classList.remove('visible');
-  responseCounter = { responded: 0, totalPlayers: data.totalPlayers || 0, type: 'essayVote' };
+  responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'essayVote' };
   const container = document.getElementById('essayVoteOptions');
   container.innerHTML = '';
-  const essays = data.essays || data.responses || [];
-  const essayList = Array.isArray(essays) ? essays : Object.entries(essays).map(([id, e]) => ({ roleId: id, ...e }));
-  essayList.forEach(r => {
+  data.responses.forEach(r => {
     if (r.roleId === myRoleId) return;
     const btn = document.createElement('div');
     btn.className = 'quiz-opt';
-    btn.innerHTML = '<strong>' + (r.roleIcon || '') + ' ' + (r.name || r.roleId) + ':</strong> "' + r.text + '"';
+    btn.innerHTML = '<strong>' + r.roleIcon + ' ' + r.name + ':</strong> "' + r.text + '"';
     btn.onclick = () => { socket.emit('voteEssay', r.roleId); btn.classList.add('selected'); container.querySelectorAll('.quiz-opt').forEach(b => b.onclick = null); };
     container.appendChild(btn);
   });
   document.getElementById('essayVotePanel').classList.add('visible');
-  let timeLeft = Math.round((data.timeLimitMs || 30000) / 1000);
+  let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('essayVoteTimer').innerText = 'Time: ' + timeLeft + 's';
   const interval = setInterval(() => {
     timeLeft--;
@@ -1232,14 +1120,14 @@ socket.on('essayVotingStarted', (data) => {
 });
 socket.on('essayVoteCount', (data) => {
   if (responseCounter && responseCounter.type === 'essayVote') {
-    responseCounter.responded = data.voted || data.votes;
+    responseCounter.responded = data.voted;
     responseCounter.totalPlayers = data.totalPlayers;
   }
 });
 socket.on('essayWinner', (data) => {
   document.getElementById('essayVotePanel').classList.remove('visible');
   responseCounter = null;
-  showToast(data.roleIcon + ' ' + data.name + ' won the essay! +5 points!');
+  showToast(data.roleIcon + ' ' + data.name + ' won the essay! They have immunity from the next disaster!');
 });
 socket.on('essayCancelled', (data) => {
   document.getElementById('essayVotePanel').classList.remove('visible');
@@ -1259,53 +1147,8 @@ socket.on('disasterCountdown', (data) => {
     if (remaining < 0) { clearInterval(iv); el.style.display = 'none'; }
   }, 1000);
 });
-socket.on('disasterHint', (data) => {
-  showDisasterWarning({ name: data.name, icon: data.icon }, 'small');
-  setTimeout(hideDisasterWarning, 3000);
-});
-socket.on('disasterDetected', (data) => {
-  document.getElementById('lookoutDetectPanel').classList.remove('visible');
-  hideDisasterWarning();
-});
 socket.on('disasterPaused', () => { showToast('Disaster paused for quiz/essay!'); });
 socket.on('disasterResumed', () => { showToast('Disaster resumed!'); });
-socket.on('quizComplete', (data) => {
-  document.getElementById('quizPanel').classList.remove('visible');
-  document.getElementById('quizResultsTitle').innerText = 'Quiz Complete';
-  document.getElementById('quizResultsText').innerText = '';
-  const winnersDiv = document.getElementById('quizWinners');
-  winnersDiv.innerHTML = '';
-  if (data.correctAnswer !== undefined) {
-    winnersDiv.innerHTML += '<p style="color:#43e97b;">Correct answer: #' + (data.correctAnswer + 1) + '</p>';
-  }
-  if (data.results) {
-    Object.values(data.results).forEach(r => {
-      const color = r.isCorrect ? '#43e97b' : (r.timedOut ? '#aaa' : '#ff6b6b');
-      winnersDiv.innerHTML += '<p style="color:' + color + ';">' + r.icon + ' ' + r.name + ': ' + (r.timedOut ? 'Timed out' : (r.isCorrect ? 'Correct' : 'Wrong')) + ' (' + (r.points >= 0 ? '+' : '') + r.points + ' pts) Total: ' + r.totalPoints + '</p>';
-    });
-  }
-  document.getElementById('quizResultsPanel').classList.add('visible');
-});
-socket.on('essayComplete', (data) => {
-  document.getElementById('essayPanel').classList.remove('visible');
-});
-socket.on('eventEnd', (data) => {
-  activeEvent = null;
-  particles = [];
-  waterLevel = 0;
-  shakeAmount = 0;
-  targetSkyDarkness = 0;
-  if (data && data.scores) {
-    playerScores = data.scores;
-    updateScoreboard();
-  }
-  if (data && data.round) {
-    currentRound = data.round;
-    const rd = document.getElementById('hostRoundDisplay');
-    if (rd) { rd.style.display = 'block'; rd.innerText = 'Round ' + currentRound + ' / ' + totalRounds; }
-  }
-});
-
 function hostThrowEssay() { socket.emit('throwEssay'); }
 function hostTriggerDisaster() { socket.emit('triggerDisaster'); }
 
@@ -1332,15 +1175,7 @@ function doRequestMedic() {
   socket.emit('requestMedic');
 }
 
-function doRequestFood() {
-  if (!myRoleId || !playersData[myRoleId]) return;
-  const me = playersData[myRoleId];
-  if (me.roleName === 'Scavenger') {
-    const hasFood = (me.inventory || []).some(i => i.id === 'food' || i.id === 'water');
-    if (!hasFood) return showToast('You have no food or water in your inventory to share!');
-  }
-  socket.emit('requestFood');
-}
+function doRequestFood() { socket.emit('requestFood'); }
 function doRequestEngineer() { socket.emit('requestEngineer'); }
 
 function updateHideButton() {
@@ -1410,22 +1245,40 @@ document.getElementById('controlPad').addEventListener('selectstart', (e) => e.p
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
 
-function getSkyColor() {
-  const nightR = 15, nightG = 15, nightB = 40;
-  const dayR = 15, dayG = 32, dayB = 39;
-  const eventR = 50, eventG = 45, eventB = 50;
-  const t = skyDarkness;
-  const nightT = dayNightState === 'night' ? 0.3 : 0;
-  const totalT = Math.min(1, t + nightT);
-  const r = Math.round(dayR + (eventR - dayR) * t + (nightR - dayR) * nightT);
-  const g = Math.round(dayG + (eventG - dayG) * t + (nightG - dayG) * nightT);
-  const b = Math.round(dayB + (eventB - dayB) * t + (nightB - dayB) * nightT);
-  return `rgb(${r},${g},${b})`;
+function drawHouseCracks() {
+  const pct = shelterState.shelterIntegrity;
+  if (pct >= 70) return;
+  ctx.strokeStyle = 'rgba(80, 40, 20, ' + (1 - pct / 100) + ')';
+  ctx.lineWidth = 2;
+  const count = Math.floor((1 - pct / 100) * 8);
+  for (let i = 0; i < count; i++) {
+    const sx = 80 + Math.random() * 640;
+    const sy = 150 + Math.random() * 280;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + (Math.random() - 0.5) * 30, sy + Math.random() * 20);
+    ctx.stroke();
+    if (Math.random() < 0.5) {
+      ctx.moveTo(sx + 5, sy + 5);
+      ctx.lineTo(sx + (Math.random() - 0.5) * 20, sy + 10 + Math.random() * 15);
+      ctx.stroke();
+    }
+  }
 }
 
 function drawHouse() {
-  const skyColor = getSkyColor();
-  ctx.fillStyle = skyColor;
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, 500);
+  if (skyDarkness > 0.3) {
+    bgGrad.addColorStop(0, '#0a0a1a');
+    bgGrad.addColorStop(1, '#1a1a2e');
+  } else if (isDayTime) {
+    bgGrad.addColorStop(0, '#0f2027');
+    bgGrad.addColorStop(1, '#2c5364');
+  } else {
+    bgGrad.addColorStop(0, '#1a1a2e');
+    bgGrad.addColorStop(1, '#0f0f1a');
+  }
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, 800, 500);
 
   ctx.fillStyle = '#4a3b32';
@@ -1458,8 +1311,7 @@ function drawHouse() {
   ctx.fillStyle = '#1a5c2e';
   ctx.fillRect(13, HOUSE.groundY - 2, 4, 12);
 
-  const houseAlpha = Math.max(0.3, shelterIntegrity / 100);
-  ctx.strokeStyle = `rgba(201,166,107,${houseAlpha})`;
+  ctx.strokeStyle = '#c9a66b';
   ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(HOUSE.leftX, HOUSE.groundY);
@@ -1468,28 +1320,6 @@ function drawHouse() {
   ctx.lineTo(HOUSE.rightX, HOUSE.roofY + 100);
   ctx.lineTo(HOUSE.rightX, HOUSE.groundY);
   ctx.stroke();
-
-  if (shelterIntegrity < 70) {
-    const crackCount = Math.floor((100 - shelterIntegrity) / 10);
-    ctx.strokeStyle = 'rgba(100,80,60,0.6)';
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < crackCount; i++) {
-      const seed = i * 137 + 42;
-      const cx = HOUSE.leftX + (seed * 7) % (HOUSE.rightX - HOUSE.leftX);
-      const cy = HOUSE.roofY + 100 + (seed * 3) % (HOUSE.groundY - HOUSE.roofY - 150);
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + 8 + (seed % 15), cy + 5 + (seed % 10));
-      ctx.lineTo(cx + 3 + (seed % 8), cy + 12 + (seed % 8));
-      ctx.stroke();
-      if (shelterIntegrity < 40) {
-        ctx.beginPath();
-        ctx.moveTo(cx + 5, cy + 3);
-        ctx.lineTo(cx + 15 + (seed % 10), cy + 8 + (seed % 6));
-        ctx.stroke();
-      }
-    }
-  }
 
   ctx.strokeStyle = 'rgba(201,166,107,0.5)';
   ctx.lineWidth = 3;
@@ -1539,30 +1369,7 @@ function drawHouse() {
       ctx.fillText(f.currentDurability + '/' + f.durability, f.x + f.w / 2, f.y - 3);
     }
   }
-
-  if (activeEvent && activeEvent.id === 'flood') {
-    waterLevel = Math.min(80, waterLevel + 0.3);
-    ctx.fillStyle = 'rgba(30,100,180,0.4)';
-    ctx.fillRect(0, HOUSE.groundY - waterLevel, 800, waterLevel);
-    ctx.fillStyle = 'rgba(60,140,220,0.3)';
-    for (let wx = 0; wx < 800; wx += 40) {
-      ctx.beginPath();
-      ctx.arc(wx + Math.sin(Date.now() / 300 + wx) * 5, HOUSE.groundY - waterLevel + 5, 8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  if (activeEvent && activeEvent.id === 'landslide') {
-    if (Math.random() < 0.3) particles.push({ type: 'rock', x: 800 + Math.random() * 100, y: HOUSE.groundY - 20 - Math.random() * 30, vx: -(Math.random() * 4 + 3), size: Math.random() * 8 + 4 });
-    particles.filter(p => p.type === 'rock').forEach(r => { r.x += r.vx; r.y += 1; });
-    particles = particles.filter(p => p.type !== 'rock' || p.x > -20);
-    ctx.fillStyle = 'rgba(120,90,60,0.7)';
-    particles.filter(p => p.type === 'rock').forEach(r => {
-      ctx.beginPath();
-      ctx.arc(r.x, r.y, r.size, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
+  drawHouseCracks();
 }
 
 function drawStickman(p) {
@@ -1592,10 +1399,6 @@ function drawStickman(p) {
   if (!p.isAlive) {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(p.x - 25, headY - 15, 50, 90);
-    ctx.fillStyle = '#ff6b6b';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('☠', p.x, headY - 20);
   }
   ctx.fillStyle = 'white';
   ctx.font = 'bold 12px Poppins, sans-serif';
@@ -1611,13 +1414,20 @@ function updateParticles(progress) {
     if (Math.random() < 0.5) particles.push({ type: 'wind', x: -10, y: Math.random() * 400 + 50, vx: Math.random() * 6 + 6, len: Math.random() * 20 + 10 });
     particles.forEach(pt => { pt.x += pt.vx; pt.y += pt.vx / 4; });
     particles = particles.filter(pt => pt.x < 850);
+  } else if (activeEvent.id === 'flood') {
+    if (Math.random() < 0.1) particles.push({ type: 'drop', x: Math.random() * 800, y: 0, speed: Math.random() * 3 + 2 });
+    particles.filter(pt => pt.type === 'drop').forEach(d => { d.y += d.speed; d.x += Math.sin(Date.now() * 0.005) * 0.5; });
+    particles = particles.filter(d => d.y < HOUSE.groundY + 10);
+  } else if (activeEvent.id === 'landslide') {
+    shakeAmount = 4;
   }
 }
 
 function drawEventEffectsForeground() {
   if (!activeEvent) return;
   const remaining = Math.max(0, eventEndsAt - Date.now());
-  const progress = 1 - remaining / (activeEvent.duration || 5000);
+  const dur = activeEvent.duration || 60000;
+  const progress = 1 - remaining / dur;
 
   if (activeEvent.id === 'typhoon') {
     ctx.strokeStyle = 'rgba(200,220,255,0.6)';
@@ -1627,6 +1437,25 @@ function drawEventEffectsForeground() {
       ctx.moveTo(pt.x, pt.y);
       ctx.lineTo(pt.x - pt.len, pt.y - pt.len / 3);
       ctx.stroke();
+    });
+  } else if (activeEvent.id === 'flood') {
+    waterLevel = Math.min(1, waterLevel + 0.02);
+    ctx.fillStyle = 'rgba(0, 100, 200, ' + (waterLevel * 0.3) + ')';
+    ctx.fillRect(0, HOUSE.groundY - waterLevel * 120, 800, waterLevel * 120 + 50);
+    ctx.fillStyle = 'rgba(200, 220, 255, 0.1)';
+    for (let i = 0; i < 5; i++) {
+      const wx = (Date.now() * 0.001 * 30 + i * 160) % 900 - 50;
+      ctx.fillRect(wx, HOUSE.groundY - 20 + Math.sin(Date.now() * 0.002 + i) * 10, 60, 2);
+    }
+  } else if (activeEvent.id === 'landslide') {
+    if (Math.random() < 0.3) particles.push({ type: 'rock', x: Math.random() * 800, y: -10, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 4 + 3, size: Math.random() * 6 + 4 });
+    particles.filter(pt => pt.type === 'rock').forEach(pt => { pt.x += pt.vx; pt.y += pt.vy; });
+    particles = particles.filter(pt => pt.y < HOUSE.groundY + 10);
+    particles.filter(pt => pt.type === 'rock').forEach(r => {
+      ctx.fillStyle = '#8B7355';
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.size, 0, Math.PI * 2);
+      ctx.fill();
     });
   }
 
@@ -1644,7 +1473,6 @@ function drawEventEffectsForeground() {
 
 function gameLoop() {
   if (!ctx) return;
-  skyDarkness += (targetSkyDarkness - skyDarkness) * 0.05;
   ctx.save();
   ctx.clearRect(0, 0, 800, 500);
   if (activeEvent && activeEvent.id === 'earthquake') {
@@ -1655,7 +1483,8 @@ function gameLoop() {
   for (const p of sortedPlayers) drawStickman(p);
   if (activeEvent) {
     const remaining = Math.max(0, eventEndsAt - Date.now());
-    const progress = 1 - remaining / (activeEvent.duration || 5000);
+    const dur = activeEvent.duration || 60000;
+    const progress = 1 - remaining / dur;
     updateParticles(progress);
     drawEventEffectsForeground();
   }

@@ -5,8 +5,8 @@
     { "id": "scv1", "name": "Scavenger", "icon": "🎒", "description": "Gathers food and resources from shrubs between disasters. Can share food with others." },
     { "id": "scv2", "name": "Scavenger", "icon": "🎒", "description": "Gathers food and resources from shrubs between disasters. Can share food with others." },
     { "id": "eng1", "name": "Engineer", "icon": "⚙️", "description": "Must initialize construction. Without the Engineer, Constructors cannot begin repairs." },
-    { "id": "con1", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter by 20% every 20 seconds. Cannot begin until Engineer activates construction." },
-    { "id": "con2", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter by 20% every 20 seconds. Cannot begin until Engineer activates construction." },
+    { "id": "con1", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter and furniture. Cannot begin until Engineer activates construction. Takes ~20 seconds." },
+    { "id": "con2", "name": "Constructor", "icon": "🔨", "description": "Repairs shelter and furniture. Cannot begin until Engineer activates construction. Takes ~20 seconds." },
     { "id": "lok1", "name": "Lookout", "icon": "🔭", "description": "Detects incoming disasters early, giving the group extra warning time." },
     { "id": "lok2", "name": "Lookout", "icon": "🔭", "description": "Detects incoming disasters early, giving the group extra warning time." },
     { "id": "ctk1", "name": "Housekeeper", "icon": "🧹", "description": "Fixes the furniture for everyone to hide into. Restores furniture durability after events." },
@@ -43,7 +43,7 @@
   "events": [
     { "id": "earthquake", "name": "Earthquake", "icon": "🌍", "durationRange": [40000, 60000], "damage": [10, 25], "hint": "The ground is shaking! Everyone brace and hang on!", "shelterDamage": [5, 15], "furnitureDamageChance": 0.3 },
     { "id": "typhoon", "name": "Typhoon", "icon": "🌪️", "durationRange": [40000, 60000], "damage": [8, 18], "hint": "Fierce winds and flying debris are battering the house!", "shelterDamage": [8, 18], "furnitureDamageChance": 0.4 },
-    { "id": "flood", "name": "Flood", "icon": "🌊", "durationRange": [40000, 60000], "damage": [6, 15], "hint": "Rising waters are flooding the house!", "shelterDamage": [3, 10], "furnitureDamageChance": 0.2, "risesWater": true },
+    { "id": "flood", "name": "Flood", "icon": "🌊", "durationRange": [40000, 60000], "damage": [6, 15], "hint": "Rising waters are flooding the house! Take shelter!", "shelterDamage": [3, 10], "furnitureDamageChance": 0.2 },
     { "id": "landslide", "name": "Landslide", "icon": "⛰️", "durationRange": [40000, 60000], "damage": [12, 20], "hint": "Debris is crashing into the house! Shelter integrity dropping fast!", "shelterDamage": [15, 30], "furnitureDamageChance": 0.5 }
   ],
   "quizQuestions": [
@@ -53,7 +53,7 @@
     { "q": "What does 'resilience' mean in DRRR?", "options": ["The ability to recover from disasters", "The ability to prevent disasters", "The strength of buildings", "The speed of evacuation"], "correct": 0 },
     { "q": "Which is an example of a natural hazard?", "options": ["Typhoon", "Car accident", "Fireworks", "Power outage"], "correct": 0 },
     { "q": "What is the first step in disaster preparedness?", "options": ["Identify hazards and assess risks", "Buy emergency supplies", "Build a safe house", "Install alarm systems"], "correct": 0 },
-    { "q": "What is an evacuation plan?", "options": ["A strategy for safely leaving a danger zone", "A plan for rebuilding after damage", "A list of emergency contacts", "A schedule for disaster drills"], "correct": 0 },
+    { "q": "What is an evacuation plan?", "options": ["A strategy for safely leaving a danger zone", "A plan for rebuilding after a disaster", "A list of emergency contacts", "A schedule for disaster drills"], "correct": 0 },
     { "q": "What is a 'safe room' designed for?", "options": ["Protection during a disaster event", "Storing food supplies", "Entertainment during storms", "Sleeping during emergencies"], "correct": 0 },
     { "q": "What does an early warning system do?", "options": ["Alerts people before a disaster strikes", "Prevents disasters from happening", "Counts casualties after a disaster", "Delivers relief goods"], "correct": 0 },
     { "q": "Which is a man-made hazard?", "options": ["Industrial fire", "Earthquake", "Volcanic eruption", "Lightning"], "correct": 0 },
@@ -82,8 +82,8 @@
   ],
   "gameSettings": {
     "totalRounds": 10,
-    "disasterMinIntervalMs": 5000,
-    "disasterMaxIntervalMs": 10000,
+    "disasterMinIntervalMs": 60000,
+    "disasterMaxIntervalMs": 120000,
     "warningDurationMs": 5000,
     "lookoutEarlyMs": 3000,
     "constructionTimeMs": 20000,
@@ -93,9 +93,9 @@
     "hungerDecayRate": 1,
     "hungerDamageRate": 2,
     "hungerThreshold": 20,
-    "dayNightCycleMs": 30000,
     "quizPointCorrect": 10,
     "quizPointWrong": -5,
-    "quizPointTimeout": 0
+    "quizPointTimeout": 0,
+    "dayNightCycleMs": 30000
   }
 }
