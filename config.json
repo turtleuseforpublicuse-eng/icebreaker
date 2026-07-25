@@ -41,10 +41,10 @@
     { "id": "shrub3", "name": "Shrub", "icon": "🌿", "x": 10, "y": 430, "floor": 0 }
   ],
   "events": [
-    { "id": "earthquake", "name": "Earthquake", "icon": "🌍", "durationRange": [20000, 30000], "damage": [20, 40], "hint": "The ground is shaking! Everyone brace and hang on!", "shelterDamage": [15, 30], "furnitureDamageChance": 0.4 },
-    { "id": "typhoon", "name": "Typhoon", "icon": "🌪️", "durationRange": [20000, 30000], "damage": [15, 35], "hint": "Fierce winds and flying debris are battering the house!", "shelterDamage": [20, 35], "furnitureDamageChance": 0.5 },
-    { "id": "flood", "name": "Flood", "icon": "🌊", "durationRange": [20000, 30000], "damage": [12, 30], "hint": "Rising waters are flooding the house! Take shelter!", "shelterDamage": [10, 20], "furnitureDamageChance": 0.3 },
-    { "id": "landslide", "name": "Landslide", "icon": "⛰️", "durationRange": [20000, 20000], "damage": [25, 45], "hint": "Debris is crashing into the house! Shelter integrity dropping fast!", "shelterDamage": [25, 40], "furnitureDamageChance": 0.6 }
+    { "id": "earthquake", "name": "Earthquake", "icon": "🌍", "durationRange": [20000, 30000], "damage": [60, 100], "hint": "The ground is shaking! Everyone brace and hang on!", "shelterDamage": [30, 50], "furnitureDamageChance": 0.5 },
+    { "id": "typhoon", "name": "Typhoon", "icon": "🌪️", "durationRange": [20000, 30000], "damage": [50, 90], "hint": "Fierce winds and flying debris are battering the house!", "shelterDamage": [35, 55], "furnitureDamageChance": 0.6 },
+    { "id": "flood", "name": "Flood", "icon": "🌊", "durationRange": [20000, 30000], "damage": [75, 120], "hint": "Rising waters are flooding the house! Rush to the second floor!", "shelterDamage": [15, 30], "furnitureDamageChance": 0.3 },
+    { "id": "landslide", "name": "Landslide", "icon": "⛰️", "durationRange": [20000, 20000], "damage": [70, 110], "hint": "Debris is crashing into the house! Shelter integrity dropping fast!", "shelterDamage": [40, 60], "furnitureDamageChance": 0.7 }
   ],
   "quizQuestions": [
     { "q": "What is RA 10121?", "options": ["Disaster Risk Reduction and Management Act", "Environmental Protection Act", "Building Safety Code", "National Emergency Protocol"], "correct": 0 },

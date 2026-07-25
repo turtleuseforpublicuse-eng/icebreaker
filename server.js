@@ -230,7 +230,8 @@ function makeFreshPlayer(roleDef, data) {
     medicRequestCount: 0,
     hidingIn: null,
     totalPoints: 0,
-    quizScore: 0
+    quizScore: 0,
+    healCount: 0
   };
 }
 
@@ -467,10 +468,10 @@ io.on('connection', (socket) => {
     socket.emit('essaySubmitted');
   });
 
-  socket.on('voteEssay', (targetRoleId) => {
+  socket.on('voteEssay', (targetRoleIds) => {
     const fromRoleId = socketToRole[socket.id];
     if (!fromRoleId) return;
-    const result = quizManager.voteEssay(fromRoleId, targetRoleId);
+    const result = quizManager.voteEssay(fromRoleId, targetRoleIds);
     if (!result.ok) return socket.emit('actionError', result.error);
     socket.emit('voteSubmitted');
   });

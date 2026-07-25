@@ -658,7 +658,7 @@ socket.on('constructionComplete', (data) => {
 });
 socket.on('constructionCancelled', () => { document.getElementById('constructionPanel').classList.remove('visible'); });
 
-socket.on('healed', (data) => { showToast(data.target + ' was healed by ' + data.medic + ' (+' + data.amount + ' HP)'); });
+socket.on('healed', (data) => { showToast(data.target + ' was healed by ' + data.medic + ' (+' + data.amount + ' HP, ' + data.healsLeft + ' heals left)'); });
 socket.on('foodShared', (data) => { showToast(data.from + ' shared food with ' + data.to + ' (+' + data.amount + ' Food)'); });
 socket.on('umbrellaBroken', (data) => { if (data.playerId === myRoleId) showToast('Your umbrella broke!'); });
 socket.on('itemReceived', (data) => { if (data.playerId === myRoleId) showToast('Found: ' + data.item.icon + ' ' + data.item.name); });
@@ -669,6 +669,7 @@ socket.on('housekeeperWaiting', (data) => { showToast(data.message); });
 socket.on('quizAnswered', (data) => { showToast(data.isCorrect ? 'Correct!' : 'Wrong answer!'); });
 socket.on('essaySubmitted', () => { showToast('Essay submitted!'); });
 socket.on('voteSubmitted', () => { showToast('Vote cast!'); });
+socket.on('gameMessage', (data) => { showToast(data.msg, 5000); });
 socket.on('medicSelectShow', (data) => {
   const container = document.getElementById('medicSelectOptions');
   container.innerHTML = '';
@@ -821,9 +822,11 @@ function updateActionPanel() {
     for (const id in playersData) {
       const p = playersData[id];
       if (id !== myRoleId && p.isAlive && p.connected) {
+        const healsLeft = 2 - (p.healCount || 0);
         const btn = document.createElement('button');
         btn.className = 'action-btn';
-        btn.innerHTML = 'Heal ' + p.roleIcon + ' ' + p.name;
+        btn.innerHTML = 'Heal ' + p.roleIcon + ' ' + p.name + (healsLeft > 0 ? ' (' + healsLeft + ')' : '');
+        btn.disabled = healsLeft <= 0;
         btn.onclick = () => socket.emit('medicHeal', id);
         grid.appendChild(btn);
       }
@@ -1204,14 +1207,35 @@ socket.on('essayVotingStarted', (data) => {
   responseCounter = { responded: 0, totalPlayers: data.totalPlayers, type: 'essayVote' };
   const container = document.getElementById('essayVoteOptions');
   container.innerHTML = '';
+  let selectedVotes = [];
   data.responses.forEach(r => {
     if (r.roleId === myRoleId) return;
     const btn = document.createElement('div');
     btn.className = 'quiz-opt';
     btn.innerHTML = '<strong>' + r.roleIcon + ' ' + r.name + ':</strong> "' + r.text + '"';
-    btn.onclick = () => { socket.emit('voteEssay', r.roleId); btn.classList.add('selected'); container.querySelectorAll('.quiz-opt').forEach(b => b.onclick = null); };
+    btn.onclick = () => {
+      if (btn.classList.contains('selected')) {
+        btn.classList.remove('selected');
+        selectedVotes = selectedVotes.filter(id => id !== r.roleId);
+      } else if (selectedVotes.length < 2) {
+        btn.classList.add('selected');
+        selectedVotes.push(r.roleId);
+      }
+    };
     container.appendChild(btn);
   });
+  const submitBtn = document.createElement('button');
+  submitBtn.className = 'btn btn-green btn-sm';
+  submitBtn.style.cssText = 'margin-top:12px; width:100%; padding:10px; font-size:16px;';
+  submitBtn.innerText = 'Submit Votes (select 2)';
+  submitBtn.onclick = () => {
+    if (selectedVotes.length < 2) { showToast('Vote for another one!'); return; }
+    socket.emit('voteEssay', selectedVotes);
+    container.querySelectorAll('.quiz-opt').forEach(b => b.onclick = null);
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'Votes submitted!';
+  };
+  container.appendChild(submitBtn);
   document.getElementById('essayVotePanel').classList.add('visible');
   let timeLeft = Math.round(data.timeLimitMs / 1000);
   document.getElementById('essayVoteTimer').innerText = 'Time: ' + timeLeft + 's';
@@ -1230,7 +1254,10 @@ socket.on('essayVoteCount', (data) => {
 socket.on('essayWinner', (data) => {
   document.getElementById('essayVotePanel').classList.remove('visible');
   responseCounter = null;
-  showToast(data.roleIcon + ' ' + data.name + ' won the essay! They have immunity from the next disaster!');
+  let msg = data.roleIcon + ' ' + data.name + ' won the essay! +' + data.points + 'pts and immunity for 1 round!';
+  if (data.runnerUp) msg += ' | 2nd: ' + data.runnerUp.roleIcon + ' ' + data.runnerUp.name + ' +' + data.runnerUp.points + 'pts';
+  if (data.third) msg += ' | 3rd: ' + data.third.roleIcon + ' ' + data.third.name + ' +' + data.third.points + 'pts';
+  showToast(msg, 6000);
 });
 socket.on('essayCancelled', (data) => {
   document.getElementById('essayVotePanel').classList.remove('visible');
