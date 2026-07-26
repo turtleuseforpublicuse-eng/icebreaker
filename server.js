@@ -56,6 +56,7 @@ const disasterManager = new DisasterManager({
   io,
   getPlayers: () => players,
   getGameStarted: () => gameStarted,
+  getCurrentRound: () => currentRound,
   shelterManager,
   itemManager,
   onDisasterStart: () => {
@@ -478,6 +479,27 @@ io.on('connection', (socket) => {
 
   socket.on('quizComplete', () => { disasterManager.resume(); });
   socket.on('essayComplete', () => { disasterManager.resume(); });
+
+  socket.on('winnerChoiceResponse', (data) => {
+    const rid = socketToRole[socket.id];
+    if (!rid || !players[rid]) return;
+    if (data.choice !== 'food') return;
+    const p = players[rid];
+    const convert = Math.min(10, p.quizScore || 0);
+    if (convert <= 0) return;
+    p.quizScore = (p.quizScore || 0) - convert;
+    p.health = Math.min(100, (p.health || 0) + 10);
+    p.hunger = Math.min(100, (p.hunger || 0) + 10);
+    io.emit('updatePlayers', players);
+    io.emit('gameMessage', { msg: `${p.roleIcon} ${p.name} traded 10pts for +10 ❤️ +10 🍞!` });
+  });
+
+  socket.on('fireTap', () => {
+    const fromRoleId = socketToRole[socket.id];
+    if (!fromRoleId) return;
+    const result = disasterManager.fireTap(fromRoleId);
+    if (!result.ok) return socket.emit('actionError', result.error);
+  });
 
   socket.on('triggerDisaster', () => {
     const evts = config.events;

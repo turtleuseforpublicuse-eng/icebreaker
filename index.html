@@ -15,6 +15,8 @@
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
   .btn-green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: #111; }
+  @keyframes firePulse { 0%,100% { box-shadow:0 0 40px rgba(255,0,0,0.6); } 50% { box-shadow:0 0 80px rgba(255,0,0,0.9); } }
+  #fireBigButton { animation: firePulse 1s ease-in-out infinite; }
   .btn-red { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); }
   .btn-gray { background: #3a3a55; }
   .btn-yellow { background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%); color: #111; }
@@ -397,6 +399,24 @@
   <p id="countdownText" style="font-size:18px; font-weight:bold; color:#ff6b6b; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); margin:0;"></p>
 </div>
 
+<div id="fireOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:10000; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center;">
+  <div style="font-size:60px; margin-bottom:10px;">🔥</div>
+  <div style="font-size:22px; font-weight:bold; color:#ff6b6b; margin-bottom:20px;">THE HOUSE IS ON FIRE!</div>
+  <div style="font-size:14px; color:#ccc; margin-bottom:10px;">Tap the button 10 times to put it out!</div>
+  <div id="fireBigButton" style="width:200px; height:200px; border-radius:50%; background:radial-gradient(circle, #ff4444, #cc0000); border:4px solid #ff8800; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:bold; color:white; cursor:pointer; box-shadow:0 0 40px rgba(255,0,0,0.6); transition:transform 0.1s, box-shadow 0.1s; user-select:none; -webkit-user-select:none;" onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='0 0 20px rgba(255,0,0,0.3)';" onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='0 0 40px rgba(255,0,0,0.6)';" ontouchstart="this.style.transform='scale(0.95)';" ontouchend="this.style.transform='scale(1)';" onclick="socket.emit('fireTap')">TAP!</div>
+  <div id="fireStatus" style="font-size:18px; color:#ffaa00; margin-top:15px;">0 / 10 taps</div>
+  <div id="fireTeamStatus" style="font-size:13px; color:#aaa; margin-top:8px;"></div>
+</div>
+
+<div class="quiz-panel" id="winnerChoicePanel" style="z-index:9998;">
+  <div class="quiz-box">
+    <h3>🏆 You Won!</h3>
+    <p id="winnerChoiceText" style="font-size:14px; color:#aaa;"></p>
+    <button class="btn btn-green" id="winnerChoicePoints" onclick="socket.emit('winnerChoiceResponse', { choice: 'points' }); document.getElementById('winnerChoicePanel').classList.remove('visible');">Keep Points</button>
+    <button class="btn btn-yellow" id="winnerChoiceFood" onclick="socket.emit('winnerChoiceResponse', { choice: 'food' }); document.getElementById('winnerChoicePanel').classList.remove('visible');">Take +10 ❤️ +10 🍞 instead</button>
+  </div>
+</div>
+
 <div class="quiz-panel" id="quizResultsPanel">
   <div class="quiz-box">
     <h3>Quiz Results</h3>
@@ -670,6 +690,11 @@ socket.on('quizAnswered', (data) => { showToast(data.isCorrect ? 'Correct!' : 'W
 socket.on('essaySubmitted', () => { showToast('Essay submitted!'); });
 socket.on('voteSubmitted', () => { showToast('Vote cast!'); });
 socket.on('gameMessage', (data) => { showToast(data.msg, 5000); });
+socket.on('winnerChoice', (data) => {
+  if (data.roleId !== myRoleId) return;
+  document.getElementById('winnerChoiceText').innerText = 'You earned ' + data.points + ' pts from the ' + data.source + '! Keep the points or trade 10 of them for 10 Health & 10 Food?';
+  document.getElementById('winnerChoicePanel').classList.add('visible');
+});
 socket.on('medicSelectShow', (data) => {
   const container = document.getElementById('medicSelectOptions');
   container.innerHTML = '';
@@ -913,6 +938,29 @@ socket.on('eventStart', (ev) => {
   hideDisasterWarning();
 });
 socket.on('eventEnd', () => { activeEvent = null; particles = []; waterLevel = 0; shakeAmount = 0; });
+
+socket.on('fireStarted', () => {
+  document.getElementById('fireOverlay').style.display = 'flex';
+  document.getElementById('fireStatus').innerText = '0 / 10 taps';
+  document.getElementById('fireTeamStatus').innerText = '';
+  document.getElementById('fireBigButton').style.background = 'radial-gradient(circle, #ff4444, #cc0000)';
+});
+let myFireTaps = 0;
+socket.on('fireTapProgress', (data) => {
+  if (data.roleId === myRoleId) {
+    myFireTaps = data.tapped;
+    document.getElementById('fireStatus').innerText = data.tapped + ' / ' + data.needed + ' taps';
+    if (data.tapped >= 10) {
+      document.getElementById('fireBigButton').style.background = 'radial-gradient(circle, #44ff44, #00aa00)';
+      document.getElementById('fireBigButton').innerText = '✅';
+    }
+  }
+  document.getElementById('fireTeamStatus').innerText = data.doneCount + ' / ' + data.totalAlive + ' players ready';
+});
+socket.on('fireEnd', () => {
+  document.getElementById('fireOverlay').style.display = 'none';
+  myFireTaps = 0;
+});
 
 socket.on('skyState', (data) => {
   skyDarkness = data.dark ? 0.7 : 0;
